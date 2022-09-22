@@ -1,3 +1,7 @@
+mod uuidd;
+
+pub use crate::uuidd::UUIDd;
+
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }

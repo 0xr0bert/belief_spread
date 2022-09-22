@@ -162,4 +162,12 @@ mod tests {
         let b2 = BasicBehaviour::new_with_uuid("b2".to_string(), uuid);
         assert_eq!(b1, b2)
     }
+
+    #[test]
+    fn test_equals_when_uuids_dont_match() {
+        let uuid = Uuid::new_v4();
+        let b1 = BasicBehaviour::new_with_uuid("b1".to_string(), uuid);
+        let b2 = BasicBehaviour::new_with_uuid("b2".to_string(), Uuid::new_v4());
+        assert_ne!(b1, b2)
+    }
 }

@@ -6,4 +6,11 @@ use uuid::Uuid;
 pub trait UUIDd {
     /// Get the UUID of the struct that implements this.
     fn uuid(&self) -> Uuid;
+
+    /// Set the UUID of the struct that implements this.
+    ///
+    /// # Arguments
+    ///
+    /// - `u`: The new [Uuid].
+    fn set_uuid(&mut self, u: Uuid);
 }

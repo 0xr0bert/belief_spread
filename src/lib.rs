@@ -1,5 +1,7 @@
+mod named;
 mod uuidd;
 
+pub use crate::named::Named;
 pub use crate::uuidd::UUIDd;
 
 pub fn add(left: usize, right: usize) -> usize {

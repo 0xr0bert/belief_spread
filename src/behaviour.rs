@@ -6,6 +6,7 @@ use crate::{Named, UUIDd};
 pub trait Behaviour: UUIDd + Named {}
 
 /// A BasicBehaviour is an implementation of a [Behaviour].
+#[derive(Debug)]
 pub struct BasicBehaviour {
     /// The name of the [BasicBehaviour]
     name: String,
@@ -82,6 +83,16 @@ impl UUIDd for BasicBehaviour {
     }
 }
 
+impl PartialEq for BasicBehaviour {
+    /// Check whether two [BasicBehaviour]s are equal based solely on their
+    /// [Uuid].
+    fn eq(&self, other: &Self) -> bool {
+        self.uuid == other.uuid
+    }
+}
+
+impl Eq for BasicBehaviour {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,5 +153,13 @@ mod tests {
         assert_eq!(b.name(), "b");
         b.set_name("bb".to_string());
         assert_eq!(b.name(), "bb");
+    }
+
+    #[test]
+    fn test_equals_when_uuids_match_but_name_doesnt() {
+        let uuid = Uuid::new_v4();
+        let b1 = BasicBehaviour::new_with_uuid("b1".to_string(), uuid);
+        let b2 = BasicBehaviour::new_with_uuid("b2".to_string(), uuid);
+        assert_eq!(b1, b2)
     }
 }

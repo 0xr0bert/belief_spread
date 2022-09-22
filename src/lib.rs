@@ -2,7 +2,7 @@ mod behaviour;
 mod named;
 mod uuidd;
 
-pub use crate::behaviour::Behaviour;
+pub use crate::behaviour::{BasicBehaviour, Behaviour};
 pub use crate::named::Named;
 pub use crate::uuidd::UUIDd;
 

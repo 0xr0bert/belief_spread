@@ -11,6 +11,9 @@ pub use crate::belief::{BasicBelief, Belief};
 pub use crate::named::Named;
 pub use crate::uuidd::UUIDd;
 
+/// The simulation time.
+pub type SimTime = u32;
+
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }

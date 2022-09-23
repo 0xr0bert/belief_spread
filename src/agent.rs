@@ -124,6 +124,50 @@ pub trait Agent: UUIDd {
     /// - `time`: The [SimTime].
     /// - `behaviour`: The new [Behaviour] that was performed at `time`.
     fn set_action(&mut self, time: SimTime, behaviour: Option<&dyn Behaviour>);
+
+    /// Gets the delta for a given [Belief].
+    ///
+    /// This is the value that the activation for the [Belief] changed by
+    /// (multiplicatively) at every time step.
+    ///
+    /// This is a strictly positive value (i.e., > 0).
+    ///
+    /// # Arguments
+    /// - `belief`: The [Belief].
+    ///
+    /// # Returns
+    /// The delta for the [Belief] and this [Agent], if found.
+    fn get_delta(&self, belief: &dyn Belief) -> Option<f64>;
+
+    /// Gets all the deltas for the [Agent].
+    ///
+    /// This is the value that the activation for the [Belief] changed by
+    /// (multiplicatively) at every time step.
+    ///
+    /// This is a strictly positive value (i.e., > 0).
+    ///
+    /// # Returns
+    /// A map from [Belief] [Uuid] to delta.
+    fn get_deltas(&self) -> &HashMap<Uuid, f64>;
+
+    /// Sets the delta for a given [Belief].
+    ///
+    /// This is the value that the activation for the [Belief] changed by
+    /// (multiplicatively) at every time step.
+    ///
+    /// This is a strictly positive value (i.e., > 0).
+    ///
+    /// If `delta` is [None], then this function removes the delta.
+    ///
+    /// # Arguments
+    /// - `belief`: The [Belief].
+    /// - `delta`: The new delta.
+    ///
+    /// # Returns
+    /// A [Result], [Ok] if nothing is wrong, or an [Err] with a
+    /// [OutOfRangeError], if the delta is not strictly positive.
+    fn set_delta(&mut self, belief: &dyn Belief, delta: Option<f64>)
+        -> Result<(), OutOfRangeError>;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -132,6 +176,7 @@ pub struct BasicAgent {
     activations: HashMap<SimTime, HashMap<Uuid, f64>>,
     friends: HashMap<Uuid, f64>,
     actions: HashMap<SimTime, Uuid>,
+    deltas: HashMap<Uuid, f64>,
 }
 
 impl BasicAgent {
@@ -175,6 +220,7 @@ impl BasicAgent {
             activations: HashMap::new(),
             friends: HashMap::new(),
             actions: HashMap::new(),
+            deltas: HashMap::new(),
         }
     }
 }
@@ -502,6 +548,109 @@ impl Agent for BasicAgent {
             Some(x) => self.actions.insert(time, x.uuid().clone()),
             None => self.actions.remove(&time),
         };
+    }
+
+    /// Gets the delta for a given [Belief].
+    ///
+    /// This is the value that the activation for the [Belief] changed by
+    /// (multiplicatively) at every time step.
+    ///
+    /// This is a strictly positive value (i.e., > 0).
+    ///
+    /// # Arguments
+    /// - `belief`: The [Belief].
+    ///
+    /// # Returns
+    /// The delta for the [Belief] and this [Agent], if found.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief, UUIDd};
+    ///
+    /// let mut a = BasicAgent::new();
+    /// let b = BasicBelief::new("b1".to_string());
+    /// a.set_delta(&b, Some(0.1)).unwrap();
+    /// assert_eq!(a.get_delta(&b).unwrap(), 0.1);
+    /// ```
+    fn get_delta(&self, belief: &dyn Belief) -> Option<f64> {
+        self.deltas.get(belief.uuid()).cloned()
+    }
+
+    /// Gets all the deltas for the [Agent].
+    ///
+    /// This is the value that the activation for the [Belief] changed by
+    /// (multiplicatively) at every time step.
+    ///
+    /// This is a strictly positive value (i.e., > 0).
+    ///
+    /// # Returns
+    /// A map from [Belief] [Uuid] to delta.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief, UUIDd};
+    ///
+    /// let mut a = BasicAgent::new();
+    /// let b = BasicBelief::new("b1".to_string());
+    /// a.set_delta(&b, Some(0.1)).unwrap();
+    /// let deltas = a.get_deltas();
+    /// assert_eq!(deltas.len(), 1);
+    /// assert_eq!(*deltas.get(b.uuid()).unwrap(), 0.1);
+    ///
+    /// ```
+    fn get_deltas(&self) -> &HashMap<Uuid, f64> {
+        &self.deltas
+    }
+
+    /// Sets the delta for a given [Belief].
+    ///
+    /// This is the value that the activation for the [Belief] changed by
+    /// (multiplicatively) at every time step.
+    ///
+    /// This is a strictly positive value (i.e., > 0).
+    ///
+    /// If `delta` is [None], then this function removes the delta.
+    ///
+    /// # Arguments
+    /// - `belief`: The [Belief].
+    /// - `delta`: The new delta.
+    ///
+    /// # Returns
+    /// A [Result], [Ok] if nothing is wrong, or an [Err] with a
+    /// [OutOfRangeError], if the delta is not strictly positive.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief, UUIDd};
+    ///
+    /// let mut a = BasicAgent::new();
+    /// let b = BasicBelief::new("b1".to_string());
+    /// a.set_delta(&b, Some(0.1)).unwrap();
+    /// assert_eq!(a.get_delta(&b).unwrap(), 0.1);
+    /// ```
+    fn set_delta(
+        &mut self,
+        belief: &dyn Belief,
+        delta: Option<f64>,
+    ) -> Result<(), OutOfRangeError> {
+        match delta {
+            None => {
+                self.deltas.remove(belief.uuid());
+                Ok(())
+            }
+            Some(d) if d <= 0.0 => Err(OutOfRangeError::TooLow {
+                found: d,
+                min: 0.0 + f64::EPSILON,
+                max: f64::INFINITY,
+            }),
+            Some(d) => {
+                self.deltas.insert(belief.uuid().clone(), d);
+                Ok(())
+            }
+        }
     }
 }
 
@@ -1013,5 +1162,152 @@ mod tests {
 
         a.set_action(2, None);
         assert_eq!(a.actions.get(&2), None);
+    }
+
+    #[test]
+    fn deltas_initialized_empty() {
+        let a = BasicAgent::new();
+        assert!(a.deltas.is_empty());
+    }
+
+    #[test]
+    fn get_delta_when_exists() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let mut deltas: HashMap<Uuid, f64> = HashMap::new();
+        deltas.insert(b.uuid().clone(), 0.2);
+        a.deltas = deltas;
+
+        assert_eq!(a.get_delta(&b).unwrap(), 0.2);
+    }
+
+    #[test]
+    fn get_delta_when_not_exists() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let deltas: HashMap<Uuid, f64> = HashMap::new();
+        a.deltas = deltas;
+
+        assert_eq!(a.get_delta(&b), None);
+    }
+
+    #[test]
+    fn get_deltas_when_exists() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let mut deltas: HashMap<Uuid, f64> = HashMap::new();
+        deltas.insert(b.uuid().clone(), 0.2);
+        a.deltas = deltas;
+
+        let deltas_obs = a.get_deltas();
+
+        assert_eq!(deltas_obs.len(), 1);
+        assert_eq!(*deltas_obs.get(b.uuid()).unwrap(), 0.2);
+    }
+
+    #[test]
+    fn get_deltas_when_not_exists() {
+        let mut a = BasicAgent::new();
+        let deltas: HashMap<Uuid, f64> = HashMap::new();
+        a.deltas = deltas;
+
+        let deltas_obs = a.get_deltas();
+
+        assert!(deltas_obs.is_empty());
+    }
+
+    #[test]
+    fn set_delta_when_exists() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let mut deltas: HashMap<Uuid, f64> = HashMap::new();
+        deltas.insert(b.uuid().clone(), 0.2);
+        a.deltas = deltas;
+
+        a.set_delta(&b, Some(0.9)).unwrap();
+        assert_eq!(*a.deltas.get(b.uuid()).unwrap(), 0.9);
+    }
+
+    #[test]
+    fn set_delta_when_exists_delete() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let mut deltas: HashMap<Uuid, f64> = HashMap::new();
+        deltas.insert(b.uuid().clone(), 0.2);
+        a.deltas = deltas;
+
+        a.set_delta(&b, None).unwrap();
+        assert_eq!(a.deltas.get(b.uuid()), None);
+    }
+
+    #[test]
+    fn set_delta_when_not_exists() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let deltas: HashMap<Uuid, f64> = HashMap::new();
+        a.deltas = deltas;
+
+        a.set_delta(&b, Some(0.9)).unwrap();
+        assert_eq!(*a.deltas.get(b.uuid()).unwrap(), 0.9);
+    }
+
+    #[test]
+    fn set_delta_when_not_exists_delete() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let deltas: HashMap<Uuid, f64> = HashMap::new();
+        a.deltas = deltas;
+
+        a.set_delta(&b, None).unwrap();
+        assert_eq!(a.deltas.get(b.uuid()), None);
+    }
+
+    #[test]
+    fn set_delta_when_exists_too_low() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let mut deltas: HashMap<Uuid, f64> = HashMap::new();
+        deltas.insert(b.uuid().clone(), 0.2);
+        a.deltas = deltas;
+
+        let result = a.set_delta(&b, Some(-0.1));
+
+        let expected_error = OutOfRangeError::TooLow {
+            found: -0.1,
+            min: 0.0 + f64::EPSILON,
+            max: f64::INFINITY,
+        };
+
+        match result {
+            Ok(()) => assert!(false, "This should have errored"),
+            Err(x) if x == expected_error => assert!(true),
+            Err(_) => assert!(false, "This errored the wrong thing!"),
+        }
+
+        assert_eq!(*a.deltas.get(b.uuid()).unwrap(), 0.2);
+    }
+
+    #[test]
+    fn set_delta_when_not_exists_too_low() {
+        let mut a = BasicAgent::new();
+        let b = BasicBelief::new("b1".to_string());
+        let deltas: HashMap<Uuid, f64> = HashMap::new();
+        a.deltas = deltas;
+
+        let result = a.set_delta(&b, Some(-0.1));
+
+        let expected_error = OutOfRangeError::TooLow {
+            found: -0.1,
+            min: 0.0 + f64::EPSILON,
+            max: f64::INFINITY,
+        };
+
+        match result {
+            Ok(()) => assert!(false, "This should have errored"),
+            Err(x) if x == expected_error => assert!(true),
+            Err(_) => assert!(false, "This errored the wrong thing!"),
+        }
+
+        assert_eq!(a.deltas.get(b.uuid()), None);
     }
 }

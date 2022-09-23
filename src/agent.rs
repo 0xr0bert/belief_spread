@@ -190,6 +190,23 @@ pub trait Agent: UUIDd {
     /// # Returns
     /// The weighted relationship.
     fn weighted_relationship(&self, t: SimTime, b1: &dyn Belief, b2: &dyn Belief) -> Option<f64>;
+
+    /// Gets the context for holding the [Belief] `b`.
+    ///
+    /// This is the compatibility for holding `b`, given all the beliefs the
+    /// agent holds.
+    ///
+    /// This is the average of [`Agent::weighted_relationship`] for every
+    /// [Belief] (as given in `beliefs).
+    ///
+    /// # Arguments
+    /// - `time`: The simulation time ([SimTime]).
+    /// - `b`: The [Belief].
+    /// - `beliefs`: All the [Belief]s in existence.
+    ///
+    /// # Returns
+    /// The context.
+    fn contextualise(&self, t: SimTime, b: &dyn Belief, beliefs: &[&dyn Belief]) -> f64;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -715,6 +732,62 @@ impl Agent for BasicAgent {
                 None => None,
             },
             None => None,
+        }
+    }
+
+    /// Gets the context for holding the [Belief] `b`.
+    ///
+    /// This is the compatibility for holding `b`, given all the beliefs the
+    /// agent holds.
+    ///
+    /// This is the average of [`Agent::weighted_relationship`] for every
+    /// [Belief] (as given in `beliefs).
+    ///
+    /// # Arguments
+    /// - `time`: The simulation time ([SimTime]).
+    /// - `b`: The [Belief].
+    /// - `beliefs`: All the [Belief]s in existence.
+    ///
+    /// # Returns
+    /// The context.
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{Agent, BasicAgent, Belief, BasicBelief, UUIDd};
+    ///
+    /// let mut a = BasicAgent::new();
+    /// let mut b1 = BasicBelief::new("b1".to_string());
+    /// let b2 = BasicBelief::new("b2".to_string());
+
+    /// a.set_activation(2, &b1, Some(1.0)).unwrap();
+    /// a.set_activation(2, &b2, Some(1.0)).unwrap();
+
+    /// b1.set_relationship(
+    ///     &BasicBelief::new_with_uuid("b1".to_string(), b1.uuid().clone()),
+    ///     Some(0.5),
+    /// )
+    /// .unwrap();
+    /// b1.set_relationship(&b2, Some(-0.75)).unwrap();
+
+    /// let mut beliefs: Vec<&dyn Belief> = Vec::new();
+    /// beliefs.push(&b1);
+    /// beliefs.push(&b2);
+    /// assert_eq!(
+    ///     a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs),
+    ///     -0.125
+    /// );
+    /// ```
+    fn contextualise(&self, t: SimTime, b: &dyn Belief, beliefs: &[&dyn Belief]) -> f64 {
+        let n_beliefs = beliefs.len();
+        if n_beliefs == 0 {
+            0.0
+        } else {
+            beliefs
+                .iter()
+                .map(|&b2| self.weighted_relationship(t, b, b2))
+                .flatten()
+                .fold(0.0, |acc, v| acc + v)
+                / (n_beliefs as f64)
         }
     }
 }
@@ -1417,5 +1490,74 @@ mod tests {
         let b2 = BasicBelief::new("b2".to_string());
 
         assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+    }
+
+    #[test]
+    fn contextualise_when_beliefs_empty_returns_0() {
+        let b = BasicBelief::new("b".to_string());
+        let a = BasicAgent::new();
+        let beliefs: Vec<&dyn Belief> = Vec::new();
+        assert_eq!(a.contextualise(2, &b, &beliefs), 0.0);
+    }
+
+    #[test]
+    fn contextualise_when_beliefs_non_empty_and_all_weighted_relationships_not_none() {
+        let mut a = BasicAgent::new();
+        let mut b1 = BasicBelief::new("b1".to_string());
+        let b2 = BasicBelief::new("b2".to_string());
+
+        a.set_activation(2, &b1, Some(1.0)).unwrap();
+        a.set_activation(2, &b2, Some(1.0)).unwrap();
+
+        b1.set_relationship(
+            &BasicBelief::new_with_uuid("b1".to_string(), b1.uuid().clone()),
+            Some(0.5),
+        )
+        .unwrap();
+        b1.set_relationship(&b2, Some(-0.75)).unwrap();
+
+        let mut beliefs: Vec<&dyn Belief> = Vec::new();
+        beliefs.push(&b1);
+        beliefs.push(&b2);
+        assert_eq!(
+            a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs),
+            -0.125
+        );
+    }
+
+    #[test]
+    fn contextualise_when_beliefs_non_empty_and_not_all_weighted_relationships_not_none() {
+        let mut a = BasicAgent::new();
+        let mut b1 = BasicBelief::new("b1".to_string());
+        let b2 = BasicBelief::new("b2".to_string());
+
+        a.set_activation(2, &b1, Some(0.5)).unwrap();
+        a.set_activation(2, &b2, Some(1.0)).unwrap();
+
+        b1.set_relationship(
+            &BasicBelief::new_with_uuid("b1".to_string(), b1.uuid().clone()),
+            Some(1.0),
+        )
+        .unwrap();
+
+        let mut beliefs: Vec<&dyn Belief> = Vec::new();
+        beliefs.push(&b1);
+        beliefs.push(&b2);
+        assert_eq!(a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs), 0.25);
+    }
+
+    #[test]
+    fn contextualise_when_beliefs_non_empty_and_all_weighted_relationships_none() {
+        let mut a = BasicAgent::new();
+        let b1 = BasicBelief::new("b1".to_string());
+        let b2 = BasicBelief::new("b2".to_string());
+
+        a.set_activation(2, &b1, Some(0.5)).unwrap();
+        a.set_activation(2, &b2, Some(1.0)).unwrap();
+
+        let mut beliefs: Vec<&dyn Belief> = Vec::new();
+        beliefs.push(&b1);
+        beliefs.push(&b2);
+        assert_eq!(a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs), 0.0);
     }
 }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::{errors::OutOfRangeError, Belief, SimTime, UUIDd};
+use crate::{errors::OutOfRangeError, Behaviour, Belief, SimTime, UUIDd};
 
 /// An [Agent] which may exist in the model.
 pub trait Agent: UUIDd {
@@ -98,6 +98,32 @@ pub trait Agent: UUIDd {
         friend: &dyn Agent,
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
+
+    /// Gets the [Behaviour] the [Agent] performed at a given [SimTime].
+    ///
+    /// Returns the [Uuid] of the [Behaviour].
+    ///
+    /// # Arguments
+    /// - `time`: The [SimTime].
+    ///
+    /// # Returns
+    /// The [Uuid] of the [Behaviour], if one was performed at `time`.
+    fn get_action(&self, time: SimTime) -> Option<&Uuid>;
+
+    /// Gets all of the [Behaviour]s that the [Agent] has performed.
+    ///
+    /// # Returns
+    /// A [HashMap] from [SimTime] to [Behaviour] [Uuid].
+    fn get_actions(&self) -> &HashMap<SimTime, Uuid>;
+
+    /// Sets the [Behaviour] the [Agent] performed at a given time.
+    ///
+    /// If [None], it unsets the [Behaviour].
+    ///
+    /// # Arguments
+    /// - `time`: The [SimTime].
+    /// - `behaviour`: The new [Behaviour] that was performed at `time`.
+    fn set_action(&mut self, time: SimTime, behaviour: Option<&dyn Behaviour>);
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -105,6 +131,7 @@ pub struct BasicAgent {
     uuid: Uuid,
     activations: HashMap<SimTime, HashMap<Uuid, f64>>,
     friends: HashMap<Uuid, f64>,
+    actions: HashMap<SimTime, Uuid>,
 }
 
 impl BasicAgent {
@@ -147,6 +174,7 @@ impl BasicAgent {
             uuid: u,
             activations: HashMap::new(),
             friends: HashMap::new(),
+            actions: HashMap::new(),
         }
     }
 }
@@ -405,6 +433,76 @@ impl Agent for BasicAgent {
             }
         }
     }
+
+    /// Gets the [Behaviour] the [Agent] performed at a given [SimTime].
+    ///
+    /// Returns the [Uuid] of the [Behaviour].
+    ///
+    /// # Arguments
+    /// - `time`: The [SimTime].
+    ///
+    /// # Returns
+    /// The [Uuid] of the [Behaviour], if one was performed at `time`.
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, UUIDd};
+    ///
+    /// let mut a1 = BasicAgent::new();
+    /// let b = BasicBehaviour::new("b1".to_string());
+    ///
+    /// a1.set_action(2, Some(&b));
+    /// assert_eq!(a1.get_action(2).unwrap(), b.uuid());
+    /// ```
+    fn get_action(&self, time: SimTime) -> Option<&Uuid> {
+        self.actions.get(&time)
+    }
+
+    /// Gets all of the [Behaviour]s that the [Agent] has performed.
+    ///
+    /// # Returns
+    /// A [HashMap] from [SimTime] to [Behaviour] [Uuid].
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, UUIDd};
+    ///
+    /// let mut a1 = BasicAgent::new();
+    /// let b = BasicBehaviour::new("b1".to_string());
+    ///
+    /// a1.set_action(2, Some(&b));
+    /// let actions = a1.get_actions();
+    /// assert_eq!(actions.len(), 1);
+    /// assert_eq!(actions.get(&2).unwrap(), b.uuid());
+    /// ```
+    fn get_actions(&self) -> &HashMap<SimTime, Uuid> {
+        &self.actions
+    }
+
+    /// Sets the [Behaviour] the [Agent] performed at a given time.
+    ///
+    /// If [None], it unsets the [Behaviour].
+    ///
+    /// # Arguments
+    /// - `time`: The [SimTime].
+    /// - `behaviour`: The new [Behaviour] that was performed at `time`.
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, UUIDd};
+    ///
+    /// let mut a1 = BasicAgent::new();
+    /// let b = BasicBehaviour::new("b1".to_string());
+    ///
+    /// a1.set_action(2, Some(&b));
+    /// assert_eq!(a1.get_action(2).unwrap(), b.uuid());
+    /// ```
+    fn set_action(&mut self, time: SimTime, behaviour: Option<&dyn Behaviour>) {
+        match behaviour {
+            Some(x) => self.actions.insert(time, x.uuid().clone()),
+            None => self.actions.remove(&time),
+        };
+    }
 }
 
 impl UUIDd for BasicAgent {
@@ -421,7 +519,7 @@ impl UUIDd for BasicAgent {
 
 #[cfg(test)]
 mod tests {
-    use crate::BasicBelief;
+    use crate::{BasicBehaviour, BasicBelief};
 
     use super::*;
 
@@ -816,5 +914,104 @@ mod tests {
         };
 
         assert_eq!(a.friends.get(a2.uuid()), None);
+    }
+
+    #[test]
+    fn actions_is_initialized_empty() {
+        let a = BasicAgent::new();
+        assert!(a.actions.is_empty());
+    }
+
+    #[test]
+    fn get_action_when_exists() {
+        let mut a = BasicAgent::new();
+        let mut actions: HashMap<SimTime, Uuid> = HashMap::new();
+        let b = BasicBehaviour::new("b".to_string());
+        actions.insert(2, b.uuid().clone());
+        a.actions = actions;
+
+        assert_eq!(a.get_action(2).unwrap(), b.uuid());
+    }
+
+    #[test]
+    fn get_action_when_not_exists() {
+        let mut a = BasicAgent::new();
+        let actions: HashMap<SimTime, Uuid> = HashMap::new();
+        a.actions = actions;
+
+        assert_eq!(a.get_action(2), None);
+    }
+
+    #[test]
+    fn get_actions_when_exists() {
+        let mut a = BasicAgent::new();
+        let mut actions: HashMap<SimTime, Uuid> = HashMap::new();
+        let b = BasicBehaviour::new("b".to_string());
+        actions.insert(2, b.uuid().clone());
+        a.actions = actions;
+
+        let actions_obs = a.get_actions();
+
+        assert_eq!(actions_obs.len(), 1);
+        assert_eq!(actions_obs.get(&2).unwrap(), b.uuid());
+    }
+
+    #[test]
+    fn get_actions_when_not_exists() {
+        let mut a = BasicAgent::new();
+        let actions: HashMap<SimTime, Uuid> = HashMap::new();
+        a.actions = actions;
+
+        let actions_obs = a.get_actions();
+
+        assert!(actions_obs.is_empty());
+    }
+
+    #[test]
+    fn set_action_when_exists() {
+        let mut a = BasicAgent::new();
+        let mut actions: HashMap<SimTime, Uuid> = HashMap::new();
+        let b = BasicBehaviour::new("b".to_string());
+        actions.insert(2, b.uuid().clone());
+        a.actions = actions;
+
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        a.set_action(2, Some(&b2));
+        assert_eq!(a.actions.get(&2).unwrap(), b2.uuid());
+    }
+
+    #[test]
+    fn set_action_when_exists_delete() {
+        let mut a = BasicAgent::new();
+        let mut actions: HashMap<SimTime, Uuid> = HashMap::new();
+        let b = BasicBehaviour::new("b".to_string());
+        actions.insert(2, b.uuid().clone());
+        a.actions = actions;
+
+        a.set_action(2, None);
+        assert_eq!(a.actions.get(&2), None);
+    }
+
+    #[test]
+    fn set_action_when_not_exists() {
+        let mut a = BasicAgent::new();
+        let actions: HashMap<SimTime, Uuid> = HashMap::new();
+        a.actions = actions;
+
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        a.set_action(2, Some(&b2));
+        assert_eq!(a.actions.get(&2).unwrap(), b2.uuid());
+    }
+
+    #[test]
+    fn set_action_when_not_exists_delete() {
+        let mut a = BasicAgent::new();
+        let actions: HashMap<SimTime, Uuid> = HashMap::new();
+        a.actions = actions;
+
+        a.set_action(2, None);
+        assert_eq!(a.actions.get(&2), None);
     }
 }

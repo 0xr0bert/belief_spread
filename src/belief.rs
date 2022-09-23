@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
 use crate::{errors::OutOfRangeError, Behaviour, Named, UUIDd};
 use anyhow::Result;
@@ -350,11 +353,18 @@ impl PartialEq for BasicBelief {
     }
 }
 
+impl Hash for BasicBelief {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.uuid.hash(state);
+    }
+}
+
 impl Eq for BasicBelief {}
 
 #[cfg(test)]
 mod tests {
     use crate::BasicBehaviour;
+    use std::collections::hash_map::DefaultHasher;
 
     use super::*;
 
@@ -536,5 +546,30 @@ mod tests {
         let b1 = BasicBelief::new_with_uuid("b1".to_string(), uuid1);
         let b2 = BasicBelief::new_with_uuid("b2".to_string(), uuid2);
         assert_ne!(b1, b2);
+    }
+
+    #[test]
+    fn test_hash_when_uuids_match_but_name_doesnt() {
+        let uuid1 = Uuid::new_v4();
+        let b1 = BasicBelief::new_with_uuid("b1".to_string(), uuid1);
+        let b2 = BasicBelief::new_with_uuid("b2".to_string(), uuid1);
+        let mut hasher1 = DefaultHasher::new();
+        let mut hasher2 = DefaultHasher::new();
+        b1.hash(&mut hasher1);
+        b2.hash(&mut hasher2);
+        assert_eq!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn test_hash_when_uuids_dont_match() {
+        let uuid1 = Uuid::new_v4();
+        let uuid2 = Uuid::new_v4();
+        let b1 = BasicBelief::new_with_uuid("b1".to_string(), uuid1);
+        let b2 = BasicBelief::new_with_uuid("b2".to_string(), uuid2);
+        let mut hasher1 = DefaultHasher::new();
+        let mut hasher2 = DefaultHasher::new();
+        b1.hash(&mut hasher1);
+        b2.hash(&mut hasher2);
+        assert_ne!(hasher1.finish(), hasher2.finish());
     }
 }

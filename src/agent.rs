@@ -168,6 +168,28 @@ pub trait Agent: UUIDd {
     /// [OutOfRangeError], if the delta is not strictly positive.
     fn set_delta(&mut self, belief: &dyn Belief, delta: Option<f64>)
         -> Result<(), OutOfRangeError>;
+
+    /// Gets the weighted relationship between [Belief]s `b1` and `b2`.
+    ///
+    /// This is the compatibility for holding `b2`, given that the [Agent]
+    /// already holds `b1`.
+    ///
+    /// This is equal to the activation of `b1`
+    /// ([`Agent::get_activation`]), multiplied by the
+    /// relationship between `b1` and `b2`
+    /// ([`Belief::get_relationship`]).
+    ///
+    /// Returns [None] if either activation of `b1` at time `t` is [None], or
+    /// the relationship between `b1` and `b2` is [None].
+    ///
+    /// # Arguments
+    /// - `t`: The simulation time ([SimTime]).
+    /// - `b1`: The first [Belief].
+    /// - `b2`: The second [Belief].
+    ///
+    /// # Returns
+    /// The weighted relationship.
+    fn weighted_relationship(&self, t: SimTime, b1: &dyn Belief, b2: &dyn Belief) -> Option<f64>;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -650,6 +672,49 @@ impl Agent for BasicAgent {
                 self.deltas.insert(belief.uuid().clone(), d);
                 Ok(())
             }
+        }
+    }
+
+    /// Gets the weighted relationship between [Belief]s `b1` and `b2`.
+    ///
+    /// This is the compatibility for holding `b2`, given that the [Agent]
+    /// already holds `b1`.
+    ///
+    /// This is equal to the activation of `b1`
+    /// ([`Agent::get_activation`]), multiplied by the
+    /// relationship between `b1` and `b2`
+    /// ([`Belief::get_relationship`]).
+    ///
+    /// Returns [None] if either activation of `b1` at time `t` is [None], or
+    /// the relationship between `b1` and `b2` is [None].
+    ///
+    /// # Arguments
+    /// - `t`: The simulation time ([SimTime]).
+    /// - `b1`: The first [Belief].
+    /// - `b2`: The second [Belief].
+    ///
+    /// # Returns
+    /// The weighted relationship.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use belief_spread::{Agent, BasicAgent, Belief, BasicBelief};
+    ///
+    /// let mut a = BasicAgent::new();
+    /// let mut b1 = BasicBelief::new("b1".to_string());
+    /// let b2 = BasicBelief::new("b2".to_string());
+    /// b1.set_relationship(&b2, Some(0.5));
+    /// a.set_activation(2, &b1, Some(0.5));
+    /// assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.25);
+    /// ```
+    fn weighted_relationship(&self, t: SimTime, b1: &dyn Belief, b2: &dyn Belief) -> Option<f64> {
+        match self.get_activation(t, b1) {
+            Some(x) => match b1.get_relationship(b2) {
+                Some(y) => Some(x * y),
+                None => None,
+            },
+            None => None,
         }
     }
 }
@@ -1309,5 +1374,48 @@ mod tests {
         }
 
         assert_eq!(a.deltas.get(b.uuid()), None);
+    }
+
+    #[test]
+    fn weighted_relationship_when_exists() {
+        let mut a = BasicAgent::new();
+        let mut b1 = BasicBelief::new("b1".to_string());
+        let b2 = BasicBelief::new("b2".to_string());
+
+        a.set_activation(2, &b1, Some(0.5)).unwrap();
+        b1.set_relationship(&b2, Some(0.1)).unwrap();
+
+        assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.05);
+    }
+
+    #[test]
+    fn weighted_relationship_when_activation_not_exists() {
+        let a = BasicAgent::new();
+        let mut b1 = BasicBelief::new("b1".to_string());
+        let b2 = BasicBelief::new("b2".to_string());
+
+        b1.set_relationship(&b2, Some(0.1)).unwrap();
+
+        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+    }
+
+    #[test]
+    fn weighted_relationship_when_relationship_not_exists() {
+        let mut a = BasicAgent::new();
+        let b1 = BasicBelief::new("b1".to_string());
+        let b2 = BasicBelief::new("b2".to_string());
+
+        a.set_activation(2, &b1, Some(0.5)).unwrap();
+
+        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+    }
+
+    #[test]
+    fn weighted_relationship_when_not_exists() {
+        let a = BasicAgent::new();
+        let b1 = BasicBelief::new("b1".to_string());
+        let b2 = BasicBelief::new("b2".to_string());
+
+        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
     }
 }

@@ -17,7 +17,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The activation, if found.
-    fn get_activation(&self, time: SimTime, belief: &dyn Belief) -> Option<f64>;
+    fn get_activation(&self, time: SimTime, belief: *const dyn Belief) -> Option<f64>;
 
     /// Gets the activations of an [Agent] towards all [Belief]s at all [SimTime]s.
     ///
@@ -28,7 +28,7 @@ pub trait Agent: UUIDd {
     /// # Return
     /// A map from simulation time to a new map from [Belief] [Uuid] to the
     /// activation.
-    fn get_activations(&self) -> &HashMap<SimTime, HashMap<Uuid, f64>>;
+    fn get_activations(&self) -> &HashMap<SimTime, HashMap<*const dyn Belief, f64>>;
 
     /// Sets the activation of an [Agent] towards a [Belief] at a given [SimTime].
     ///
@@ -47,7 +47,7 @@ pub trait Agent: UUIDd {
     fn set_activation(
         &mut self,
         time: SimTime,
-        belief: &dyn Belief,
+        belief: *const dyn Belief,
         activation: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -189,7 +189,17 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The weighted relationship.
-    fn weighted_relationship(&self, t: SimTime, b1: &dyn Belief, b2: &dyn Belief) -> Option<f64>;
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe and *requires* that both `b1` and `b2` are not
+    /// null pointers. This is not checked safely in the function.
+    unsafe fn weighted_relationship(
+        &self,
+        t: SimTime,
+        b1: *const dyn Belief,
+        b2: *const dyn Belief,
+    ) -> Option<f64>;
 
     /// Gets the context for holding the [Belief] `b`.
     ///
@@ -206,13 +216,23 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The context.
-    fn contextualise(&self, t: SimTime, b: &dyn Belief, beliefs: &[&dyn Belief]) -> f64;
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe and *requires* that `b`, `belief` and the members
+    /// of `beliefs` are not null pointers. This is not checked safely in the function.
+    unsafe fn contextualise(
+        &self,
+        t: SimTime,
+        b: *const dyn Belief,
+        beliefs: *const [*const dyn Belief],
+    ) -> f64;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
 pub struct BasicAgent {
     uuid: Uuid,
-    activations: HashMap<SimTime, HashMap<Uuid, f64>>,
+    activations: HashMap<SimTime, HashMap<*const dyn Belief, f64>>,
     friends: HashMap<Uuid, f64>,
     actions: HashMap<SimTime, Uuid>,
     deltas: HashMap<Uuid, f64>,
@@ -286,9 +306,9 @@ impl Agent for BasicAgent {
     /// a.set_activation(3, &b, Some(0.1));
     /// assert_eq!(a.get_activation(3, &b).unwrap(), 0.1);
     /// ```
-    fn get_activation(&self, time: SimTime, belief: &dyn Belief) -> Option<f64> {
+    fn get_activation(&self, time: SimTime, belief: *const dyn Belief) -> Option<f64> {
         match self.activations.get(&time) {
-            Some(x) => x.get(belief.uuid()).cloned(),
+            Some(x) => x.get(&belief).cloned(),
             None => None,
         }
     }
@@ -314,9 +334,9 @@ impl Agent for BasicAgent {
     /// let activations = a.get_activations();
     /// assert_eq!(activations.len(), 1);
     /// assert_eq!(activations.get(&3).unwrap().len(), 1);
-    /// assert_eq!(*activations.get(&3).unwrap().get(b.uuid()).unwrap(), 0.1);
+    /// assert_eq!(*activations.get(&3).unwrap().get(&(&b as *const dyn Belief)).unwrap(), 0.1);
     /// ```
-    fn get_activations(&self) -> &HashMap<SimTime, HashMap<Uuid, f64>> {
+    fn get_activations(&self) -> &HashMap<SimTime, HashMap<*const dyn Belief, f64>> {
         &self.activations
     }
 
@@ -365,7 +385,7 @@ impl Agent for BasicAgent {
     fn set_activation(
         &mut self,
         time: SimTime,
-        belief: &dyn Belief,
+        belief: *const dyn Belief,
         activation: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match activation {
@@ -383,15 +403,12 @@ impl Agent for BasicAgent {
                 if !self.activations.contains_key(&time) {
                     self.activations.insert(time, HashMap::new());
                 }
-                self.activations
-                    .get_mut(&time)
-                    .unwrap()
-                    .insert(*belief.uuid(), x);
+                self.activations.get_mut(&time).unwrap().insert(belief, x);
                 Ok(())
             }
             None => {
                 match self.activations.get_mut(&time) {
-                    Some(x) => x.remove(belief.uuid()),
+                    Some(x) => x.remove(&belief),
                     None => None,
                 };
                 Ok(())
@@ -723,11 +740,24 @@ impl Agent for BasicAgent {
     /// let b2 = BasicBelief::new("b2".to_string());
     /// b1.set_relationship(&b2, Some(0.5));
     /// a.set_activation(2, &b1, Some(0.5));
-    /// assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.25);
+    ///
+    /// unsafe {
+    ///     assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.25);
+    /// }
     /// ```
-    fn weighted_relationship(&self, t: SimTime, b1: &dyn Belief, b2: &dyn Belief) -> Option<f64> {
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe and *requires* that both `b1` and `b2` are not
+    /// null pointers. This is not checked safely in the function.
+    unsafe fn weighted_relationship(
+        &self,
+        t: SimTime,
+        b1: *const dyn Belief,
+        b2: *const dyn Belief,
+    ) -> Option<f64> {
         match self.get_activation(t, b1) {
-            Some(x) => match b1.get_relationship(b2) {
+            Some(x) => match (&*b1).get_relationship(b2) {
                 Some(y) => Some(x * y),
                 None => None,
             },
@@ -763,26 +793,35 @@ impl Agent for BasicAgent {
     /// a.set_activation(2, &b2, Some(1.0)).unwrap();
 
     /// b1.set_relationship(
-    ///     &BasicBelief::new_with_uuid("b1".to_string(), b1.uuid().clone()),
+    ///     &b1,
     ///     Some(0.5),
     /// )
     /// .unwrap();
     /// b1.set_relationship(&b2, Some(-0.75)).unwrap();
 
-    /// let mut beliefs: Vec<&dyn Belief> = Vec::new();
+    /// let mut beliefs: Vec<*const dyn Belief> = Vec::new();
     /// beliefs.push(&b1);
     /// beliefs.push(&b2);
-    /// assert_eq!(
-    ///     a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs),
-    ///     -0.125
-    /// );
+    ///
+    /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
+    /// unsafe {
+    ///     assert_eq!(
+    ///         a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+    ///         -0.125
+    ///     );
+    /// }
     /// ```
-    fn contextualise(&self, t: SimTime, b: &dyn Belief, beliefs: &[&dyn Belief]) -> f64 {
-        let n_beliefs = beliefs.len();
+    unsafe fn contextualise(
+        &self,
+        t: SimTime,
+        b: *const dyn Belief,
+        beliefs: *const [*const dyn Belief],
+    ) -> f64 {
+        let n_beliefs = (&*beliefs).len();
         if n_beliefs == 0 {
             0.0
         } else {
-            beliefs
+            (&*beliefs)
                 .iter()
                 .map(|&b2| self.weighted_relationship(t, b, b2))
                 .flatten()
@@ -849,9 +888,9 @@ mod tests {
     fn get_activation_when_exists() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let mut act_at_2: HashMap<Uuid, f64> = HashMap::new();
-        act_at_2.insert(b.uuid().clone(), 0.5);
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let mut act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
+        act_at_2.insert(&b, 0.5);
         act.insert(2, act_at_2);
         a.activations = act;
         assert_eq!(a.get_activation(2, &b).unwrap(), 0.5);
@@ -861,8 +900,8 @@ mod tests {
     fn get_activation_when_time_exists_but_belief_doesnt() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let act_at_2: HashMap<Uuid, f64> = HashMap::new();
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
         act.insert(2, act_at_2);
         a.activations = act;
         assert_eq!(a.get_activation(2, &b), None);
@@ -872,7 +911,7 @@ mod tests {
     fn get_activation_when_not_exists() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
+        let act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
         a.activations = act;
         assert_eq!(a.get_activation(2, &b), None);
     }
@@ -881,22 +920,29 @@ mod tests {
     fn get_activations_when_exists() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let mut act_at_2: HashMap<Uuid, f64> = HashMap::new();
-        act_at_2.insert(b.uuid().clone(), 0.5);
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let mut act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
+        act_at_2.insert(&b, 0.5);
         act.insert(2, act_at_2);
         a.activations = act;
         let activations = a.get_activations();
         assert_eq!(activations.len(), 1);
         assert_eq!(activations.get(&2).unwrap().len(), 1);
-        assert_eq!(*activations.get(&2).unwrap().get(b.uuid()).unwrap(), 0.5);
+        assert_eq!(
+            *activations
+                .get(&2)
+                .unwrap()
+                .get(&(&b as *const dyn Belief))
+                .unwrap(),
+            0.5
+        );
     }
 
     #[test]
     fn get_activations_when_time_exists_but_belief_doesnt() {
         let mut a = BasicAgent::new();
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let act_at_2: HashMap<Uuid, f64> = HashMap::new();
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
         act.insert(2, act_at_2);
         a.activations = act;
         let activations = a.get_activations();
@@ -907,7 +953,7 @@ mod tests {
     #[test]
     fn get_activations_when_not_exists() {
         let mut a = BasicAgent::new();
-        let act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
+        let act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
         a.activations = act;
         let activations = a.get_activations();
         assert!(activations.is_empty());
@@ -917,32 +963,44 @@ mod tests {
     fn set_activation_delete_when_exists() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let mut act_at_2: HashMap<Uuid, f64> = HashMap::new();
-        act_at_2.insert(b.uuid().clone(), 0.5);
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let mut act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
+        act_at_2.insert(&b, 0.5);
         act.insert(2, act_at_2);
         a.activations = act;
         a.set_activation(2, &b, None).unwrap();
-        assert_eq!(a.activations.get(&2).unwrap().get(b.uuid()), None);
+        assert_eq!(
+            a.activations
+                .get(&2)
+                .unwrap()
+                .get(&(&b as *const dyn Belief)),
+            None
+        );
     }
 
     #[test]
     fn set_activation_delete_when_time_exists_but_belief_doesnt() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let act_at_2: HashMap<Uuid, f64> = HashMap::new();
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
         act.insert(2, act_at_2);
         a.activations = act;
         a.set_activation(2, &b, None).unwrap();
-        assert_eq!(a.activations.get(&2).unwrap().get(b.uuid()), None);
+        assert_eq!(
+            a.activations
+                .get(&2)
+                .unwrap()
+                .get(&(&b as *const dyn Belief)),
+            None
+        );
     }
 
     #[test]
     fn set_activation_delete_when_not_exists() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
+        let act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
         a.activations = act;
         a.set_activation(2, &b, None).unwrap();
         assert_eq!(a.activations.get(&2), None);
@@ -984,35 +1042,56 @@ mod tests {
     fn set_activation_when_exists() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let mut act_at_2: HashMap<Uuid, f64> = HashMap::new();
-        act_at_2.insert(b.uuid().clone(), 0.5);
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let mut act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
+        act_at_2.insert(&b, 0.5);
         act.insert(2, act_at_2);
         a.activations = act;
         a.set_activation(2, &b, Some(0.2)).unwrap();
-        assert_eq!(*a.activations.get(&2).unwrap().get(b.uuid()).unwrap(), 0.2);
+        assert_eq!(
+            *a.activations
+                .get(&2)
+                .unwrap()
+                .get(&(&b as *const dyn Belief))
+                .unwrap(),
+            0.2
+        );
     }
 
     #[test]
     fn set_activation_when_time_exists_but_belief_doesnt() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let mut act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
-        let act_at_2: HashMap<Uuid, f64> = HashMap::new();
+        let mut act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
+        let act_at_2: HashMap<*const dyn Belief, f64> = HashMap::new();
         act.insert(2, act_at_2);
         a.activations = act;
         a.set_activation(2, &b, Some(0.2)).unwrap();
-        assert_eq!(*a.activations.get(&2).unwrap().get(b.uuid()).unwrap(), 0.2);
+        assert_eq!(
+            *a.activations
+                .get(&2)
+                .unwrap()
+                .get(&(&b as *const dyn Belief))
+                .unwrap(),
+            0.2
+        );
     }
 
     #[test]
     fn set_activation_when_not_exists() {
         let mut a = BasicAgent::new();
         let b = BasicBelief::new("b".to_string());
-        let act: HashMap<SimTime, HashMap<Uuid, f64>> = HashMap::new();
+        let act: HashMap<SimTime, HashMap<*const dyn Belief, f64>> = HashMap::new();
         a.activations = act;
         a.set_activation(2, &b, Some(0.2)).unwrap();
-        assert_eq!(*a.activations.get(&2).unwrap().get(b.uuid()).unwrap(), 0.2);
+        assert_eq!(
+            *a.activations
+                .get(&2)
+                .unwrap()
+                .get(&(&b as *const dyn Belief))
+                .unwrap(),
+            0.2
+        );
     }
 
     #[test]
@@ -1458,7 +1537,9 @@ mod tests {
         a.set_activation(2, &b1, Some(0.5)).unwrap();
         b1.set_relationship(&b2, Some(0.1)).unwrap();
 
-        assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.05);
+        unsafe {
+            assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.05);
+        }
     }
 
     #[test]
@@ -1469,7 +1550,9 @@ mod tests {
 
         b1.set_relationship(&b2, Some(0.1)).unwrap();
 
-        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+        unsafe {
+            assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+        }
     }
 
     #[test]
@@ -1480,7 +1563,9 @@ mod tests {
 
         a.set_activation(2, &b1, Some(0.5)).unwrap();
 
-        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+        unsafe {
+            assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+        }
     }
 
     #[test]
@@ -1489,15 +1574,21 @@ mod tests {
         let b1 = BasicBelief::new("b1".to_string());
         let b2 = BasicBelief::new("b2".to_string());
 
-        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+        unsafe {
+            assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
+        }
     }
 
     #[test]
     fn contextualise_when_beliefs_empty_returns_0() {
         let b = BasicBelief::new("b".to_string());
         let a = BasicAgent::new();
-        let beliefs: Vec<&dyn Belief> = Vec::new();
-        assert_eq!(a.contextualise(2, &b, &beliefs), 0.0);
+        let beliefs: Vec<*const dyn Belief> = Vec::new();
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        unsafe {
+            assert_eq!(a.contextualise(2, &b, beliefs_slice), 0.0);
+        }
     }
 
     #[test]
@@ -1509,20 +1600,20 @@ mod tests {
         a.set_activation(2, &b1, Some(1.0)).unwrap();
         a.set_activation(2, &b2, Some(1.0)).unwrap();
 
-        b1.set_relationship(
-            &BasicBelief::new_with_uuid("b1".to_string(), b1.uuid().clone()),
-            Some(0.5),
-        )
-        .unwrap();
+        b1.set_relationship(&b1, Some(0.5)).unwrap();
         b1.set_relationship(&b2, Some(-0.75)).unwrap();
 
-        let mut beliefs: Vec<&dyn Belief> = Vec::new();
+        let mut beliefs: Vec<*const dyn Belief> = Vec::new();
         beliefs.push(&b1);
         beliefs.push(&b2);
-        assert_eq!(
-            a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs),
-            -0.125
-        );
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        unsafe {
+            assert_eq!(
+                a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+                -0.125
+            );
+        }
     }
 
     #[test]
@@ -1534,16 +1625,19 @@ mod tests {
         a.set_activation(2, &b1, Some(0.5)).unwrap();
         a.set_activation(2, &b2, Some(1.0)).unwrap();
 
-        b1.set_relationship(
-            &BasicBelief::new_with_uuid("b1".to_string(), b1.uuid().clone()),
-            Some(1.0),
-        )
-        .unwrap();
+        b1.set_relationship(&b1, Some(1.0)).unwrap();
 
-        let mut beliefs: Vec<&dyn Belief> = Vec::new();
+        let mut beliefs: Vec<*const dyn Belief> = Vec::new();
         beliefs.push(&b1);
         beliefs.push(&b2);
-        assert_eq!(a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs), 0.25);
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        unsafe {
+            assert_eq!(
+                a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+                0.25
+            );
+        }
     }
 
     #[test]
@@ -1555,9 +1649,16 @@ mod tests {
         a.set_activation(2, &b1, Some(0.5)).unwrap();
         a.set_activation(2, &b2, Some(1.0)).unwrap();
 
-        let mut beliefs: Vec<&dyn Belief> = Vec::new();
+        let mut beliefs: Vec<*const dyn Belief> = Vec::new();
         beliefs.push(&b1);
         beliefs.push(&b2);
-        assert_eq!(a.contextualise(2, *beliefs.get(0).unwrap(), &beliefs), 0.0);
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        unsafe {
+            assert_eq!(
+                a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+                0.0
+            );
+        }
     }
 }

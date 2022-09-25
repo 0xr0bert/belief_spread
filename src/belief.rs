@@ -21,7 +21,7 @@ pub trait Belief: Named + UUIDd {
     ///
     /// # Returns
     /// The value, if found.
-    fn get_perception(&self, behaviour: &dyn Behaviour) -> Option<f64>;
+    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64>;
 
     /// Sets the perception.
     ///
@@ -41,7 +41,7 @@ pub trait Belief: Named + UUIDd {
     /// [OutOfRangeError], if the perception is not in range [-1, +1].
     fn set_perception(
         &mut self,
-        behaviour: &dyn Behaviour,
+        behaviour: *const dyn Behaviour,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -89,7 +89,7 @@ pub trait Belief: Named + UUIDd {
 pub struct BasicBelief {
     name: String,
     uuid: Uuid,
-    perception: HashMap<Uuid, f64>,
+    perception: HashMap<*const dyn Behaviour, f64>,
     relationship: HashMap<Uuid, f64>,
 }
 
@@ -164,8 +164,8 @@ impl Belief for BasicBelief {
     /// b.set_perception(&behaviour, Some(0.1));
     /// assert_eq!(b.get_perception(&behaviour).unwrap(), 0.1);
     /// ```
-    fn get_perception(&self, behaviour: &dyn Behaviour) -> Option<f64> {
-        self.perception.get(behaviour.uuid()).cloned()
+    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64> {
+        self.perception.get(&behaviour).cloned()
     }
 
     /// Sets the perception.
@@ -196,12 +196,12 @@ impl Belief for BasicBelief {
     /// ```
     fn set_perception(
         &mut self,
-        behaviour: &dyn Behaviour,
+        behaviour: *const dyn Behaviour,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match perception {
             None => {
-                self.perception.remove(behaviour.uuid());
+                self.perception.remove(&behaviour);
                 Ok(())
             }
             Some(x) if x > 1.0 => Err(OutOfRangeError::TooHigh {
@@ -215,7 +215,7 @@ impl Belief for BasicBelief {
                 max: 1.0,
             }),
             Some(x) => {
-                self.perception.insert(behaviour.uuid().clone(), x);
+                self.perception.insert(behaviour, x);
                 Ok(())
             }
         }

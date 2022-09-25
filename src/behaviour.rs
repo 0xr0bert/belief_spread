@@ -1,9 +1,10 @@
+use core::fmt::Debug;
 use uuid::Uuid;
 
 use crate::{Named, UUIDd};
 
 /// A Behaviour.
-pub trait Behaviour: UUIDd + Named {}
+pub trait Behaviour: UUIDd + Named + Debug {}
 
 /// A BasicBehaviour is an implementation of a [Behaviour].
 #[derive(Debug)]

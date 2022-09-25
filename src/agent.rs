@@ -214,17 +214,8 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The context.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe and *requires* that `b`, `belief` and the members
-    /// of `beliefs` are not null pointers. This is not checked safely in the function.
-    unsafe fn contextualise(
-        &self,
-        t: SimTime,
-        b: &dyn Belief,
-        beliefs: *const [*const dyn Belief],
-    ) -> f64;
+    fn contextualise(&self, t: SimTime, b: &dyn Belief, beliefs: *const [*const dyn Belief])
+        -> f64;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -752,7 +743,8 @@ impl Agent for BasicAgent {
     /// # Arguments
     /// - `time`: The simulation time ([SimTime]).
     /// - `b`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence.
+    /// - `beliefs`: All the [Belief]s in existence. If this is null, function
+    /// returns 0
     ///
     /// # Returns
     /// The context.
@@ -764,45 +756,47 @@ impl Agent for BasicAgent {
     /// let mut a = BasicAgent::new();
     /// let mut b1 = BasicBelief::new("b1".to_string());
     /// let b2 = BasicBelief::new("b2".to_string());
-
+    ///
     /// a.set_activation(2, &b1, Some(1.0)).unwrap();
     /// a.set_activation(2, &b2, Some(1.0)).unwrap();
-
+    ///
     /// b1.set_relationship(
     ///     &b1,
     ///     Some(0.5),
     /// )
     /// .unwrap();
     /// b1.set_relationship(&b2, Some(-0.75)).unwrap();
-
+    ///
     /// let mut beliefs: Vec<*const dyn Belief> = Vec::new();
     /// beliefs.push(&b1);
     /// beliefs.push(&b2);
     ///
     /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
-    /// unsafe {
-    ///     assert_eq!(
-    ///         a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
-    ///         -0.125
-    ///     );
-    /// }
+    /// assert_eq!(
+    ///     a.contextualise(2, &b1, beliefs_slice),
+    ///     -0.125
+    /// );
     /// ```
-    unsafe fn contextualise(
+    fn contextualise(
         &self,
         t: SimTime,
         b: &dyn Belief,
         beliefs: *const [*const dyn Belief],
     ) -> f64 {
-        let n_beliefs = (&*beliefs).len();
-        if n_beliefs == 0 {
-            0.0
-        } else {
-            (&*beliefs)
-                .iter()
-                .map(|&b2| self.weighted_relationship(t, b, b2))
-                .flatten()
-                .fold(0.0, |acc, v| acc + v)
-                / (n_beliefs as f64)
+        unsafe {
+            match beliefs.as_ref() {
+                None => 0.0,
+                Some(bs) => match bs.len() {
+                    0 => 0.0,
+                    size => {
+                        bs.iter()
+                            .map(|&b2| self.weighted_relationship(t, b, b2))
+                            .flatten()
+                            .fold(0.0, |acc, v| acc + v)
+                            / (size as f64)
+                    }
+                },
+            }
         }
     }
 }
@@ -821,6 +815,8 @@ impl UUIDd for BasicAgent {
 
 #[cfg(test)]
 mod tests {
+    use std::ptr::{null, slice_from_raw_parts};
+
     use crate::{BasicBehaviour, BasicBelief};
 
     use super::*;
@@ -1551,15 +1547,22 @@ mod tests {
     }
 
     #[test]
+    fn contextualise_when_beliefs_null_returns_0() {
+        let b = BasicBelief::new("b".to_string());
+        let a = BasicAgent::new();
+        let beliefs_slice: *const [*const dyn Belief] = slice_from_raw_parts(null(), 0);
+
+        assert_eq!(a.contextualise(2, &b, beliefs_slice), 0.0);
+    }
+
+    #[test]
     fn contextualise_when_beliefs_empty_returns_0() {
         let b = BasicBelief::new("b".to_string());
         let a = BasicAgent::new();
         let beliefs: Vec<*const dyn Belief> = Vec::new();
         let beliefs_slice: &[*const dyn Belief] = &beliefs;
 
-        unsafe {
-            assert_eq!(a.contextualise(2, &b, beliefs_slice), 0.0);
-        }
+        assert_eq!(a.contextualise(2, &b, beliefs_slice), 0.0);
     }
 
     #[test]
@@ -1579,12 +1582,7 @@ mod tests {
         beliefs.push(&b2);
         let beliefs_slice: &[*const dyn Belief] = &beliefs;
 
-        unsafe {
-            assert_eq!(
-                a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
-                -0.125
-            );
-        }
+        assert_eq!(a.contextualise(2, &b1, beliefs_slice), -0.125);
     }
 
     #[test]
@@ -1603,12 +1601,7 @@ mod tests {
         beliefs.push(&b2);
         let beliefs_slice: &[*const dyn Belief] = &beliefs;
 
-        unsafe {
-            assert_eq!(
-                a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
-                0.25
-            );
-        }
+        assert_eq!(a.contextualise(2, &b1, beliefs_slice), 0.25);
     }
 
     #[test]
@@ -1625,11 +1618,6 @@ mod tests {
         beliefs.push(&b2);
         let beliefs_slice: &[*const dyn Belief] = &beliefs;
 
-        unsafe {
-            assert_eq!(
-                a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
-                0.0
-            );
-        }
+        assert_eq!(a.contextualise(2, &b1, beliefs_slice), 0.0);
     }
 }

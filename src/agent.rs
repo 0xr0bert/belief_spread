@@ -26,7 +26,7 @@ pub trait Agent: UUIDd {
     /// [Belief]s are referenced by their [Uuid]s.
     ///
     /// # Return
-    /// A map from simulation time to a new map from [Belief] [Uuid] to the
+    /// A map from simulation time to a new map from [Belief] to the
     /// activation.
     fn get_activations(&self) -> &HashMap<SimTime, HashMap<*const dyn Belief, f64>>;
 
@@ -320,7 +320,7 @@ impl Agent for BasicAgent {
     /// [Belief]s are referenced by their [Uuid]s.
     ///
     /// # Return
-    /// A map from simulation time to a new map from [Belief] [Uuid] to the
+    /// A map from simulation time to a new map from [Belief] to the
     /// activation.
     ///
     /// # Examples

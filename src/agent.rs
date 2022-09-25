@@ -59,8 +59,8 @@ pub trait Agent: UUIDd {
     /// All weights are in the range [0, 1].
     ///
     /// # Returns
-    /// The friends (identified by their Uuid) with their weight of connection.
-    fn get_friends(&self) -> &HashMap<Uuid, f64>;
+    /// The friends with their weight of connection.
+    fn get_friends(&self) -> &HashMap<*const dyn Agent, f64>;
 
     /// Gets the weight of a friend of the [Agent].
     ///
@@ -73,7 +73,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The weight, or [None] if they are not friends.
-    fn get_friend_weight(&self, friend: &dyn Agent) -> Option<f64>;
+    fn get_friend_weight(&self, friend: *const dyn Agent) -> Option<f64>;
 
     /// Set the weight of a friend of the [Agent].
     ///
@@ -95,7 +95,7 @@ pub trait Agent: UUIDd {
     /// [OutOfRangeError], if the weight is not in the range [0, +1].
     fn set_friend_weight(
         &mut self,
-        friend: &dyn Agent,
+        friend: *const dyn Agent,
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -233,7 +233,7 @@ pub trait Agent: UUIDd {
 pub struct BasicAgent {
     uuid: Uuid,
     activations: HashMap<SimTime, HashMap<*const dyn Belief, f64>>,
-    friends: HashMap<Uuid, f64>,
+    friends: HashMap<*const dyn Agent, f64>,
     actions: HashMap<SimTime, Uuid>,
     deltas: HashMap<Uuid, f64>,
 }
@@ -435,9 +435,9 @@ impl Agent for BasicAgent {
     /// a1.set_friend_weight(&a2, Some(0.1)).unwrap();
     /// let friends = a1.get_friends();
     /// assert_eq!(friends.len(), 1);
-    /// assert_eq!(*friends.get(a2.uuid()).unwrap(), 0.1);
+    /// assert_eq!(*friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.1);
     /// ```
-    fn get_friends(&self) -> &HashMap<Uuid, f64> {
+    fn get_friends(&self) -> &HashMap<*const dyn Agent, f64> {
         &self.friends
     }
 
@@ -462,8 +462,8 @@ impl Agent for BasicAgent {
     /// a1.set_friend_weight(&a2, Some(0.1)).unwrap();
     /// assert_eq!(a1.get_friend_weight(&a2).unwrap(), 0.1)
     /// ```
-    fn get_friend_weight(&self, friend: &dyn Agent) -> Option<f64> {
-        self.friends.get(friend.uuid()).cloned()
+    fn get_friend_weight(&self, friend: *const dyn Agent) -> Option<f64> {
+        self.friends.get(&friend).cloned()
     }
 
     /// Set the weight of a friend of the [Agent].
@@ -485,21 +485,6 @@ impl Agent for BasicAgent {
     /// A [Result], [Ok] if nothing went wrong, or an [Err] with an
     /// [OutOfRangeError], if the weight is not in the range [0, +1].
     ///
-    /// # Warning
-    ///
-    /// If `friend` is the same [Agent], you'll get into errors with two references.
-    ///
-    /// A nasty hack is to do somsething like so:
-    ///
-    /// ```
-    /// use belief_spread::{BasicAgent, Agent, UUIDd};
-    ///
-    /// let mut a1 = BasicAgent::new();
-    /// let a1_cl = BasicAgent::new_with_uuid(a1.uuid().clone());
-    /// a1.set_friend_weight(&a1_cl, Some(0.1)).unwrap();
-    /// assert_eq!(a1.get_friend_weight(&a1).unwrap(), 0.1)
-    /// ```
-    ///
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, UUIDd};
@@ -511,7 +496,7 @@ impl Agent for BasicAgent {
     /// ```
     fn set_friend_weight(
         &mut self,
-        friend: &dyn Agent,
+        friend: *const dyn Agent,
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match weight {
@@ -526,11 +511,11 @@ impl Agent for BasicAgent {
                 max: 1.0,
             }),
             Some(x) => {
-                self.friends.insert(friend.uuid().clone(), x);
+                self.friends.insert(friend, x);
                 Ok(())
             }
             None => {
-                self.friends.remove(friend.uuid());
+                self.friends.remove(&friend);
                 Ok(())
             }
         }
@@ -1103,7 +1088,7 @@ mod tests {
     #[test]
     fn get_friends_when_empty() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<Uuid, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
         assert!(a.get_friends().is_empty())
     }
@@ -1112,19 +1097,22 @@ mod tests {
     fn get_friends_when_not_empty() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let mut friends: HashMap<Uuid, f64> = HashMap::new();
-        friends.insert(a2.uuid, 0.3);
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        friends.insert(&a2, 0.3);
         a.friends = friends;
         assert_eq!(a.get_friends().len(), 1);
-        assert_eq!(*a.get_friends().get(a2.uuid()).unwrap(), 0.3);
+        assert_eq!(
+            *a.get_friends().get(&(&a2 as *const dyn Agent)).unwrap(),
+            0.3
+        );
     }
 
     #[test]
     fn get_friend_weight_when_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let mut friends: HashMap<Uuid, f64> = HashMap::new();
-        friends.insert(a2.uuid, 0.3);
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        friends.insert(&a2, 0.3);
         a.friends = friends;
         assert_eq!(a.get_friend_weight(&a2).unwrap(), 0.3);
     }
@@ -1133,7 +1121,7 @@ mod tests {
     fn get_friend_weight_when_not_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let friends: HashMap<Uuid, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
         assert_eq!(a.get_friend_weight(&a2), None);
     }
@@ -1141,55 +1129,55 @@ mod tests {
     #[test]
     fn set_friend_weight_when_not_exists_and_valid() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<Uuid, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
 
         let a2 = BasicAgent::new();
         a.set_friend_weight(&a2, Some(0.5)).unwrap();
-        assert_eq!(*a.friends.get(a2.uuid()).unwrap(), 0.5);
+        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.5);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_valid() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<Uuid, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(a2.uuid.clone(), 0.2);
+        friends.insert(&a2, 0.2);
         a.friends = friends;
 
         a.set_friend_weight(&a2, Some(0.5)).unwrap();
-        assert_eq!(*a.friends.get(a2.uuid()).unwrap(), 0.5);
+        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.5);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_valid_delete() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<Uuid, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(a2.uuid.clone(), 0.2);
+        friends.insert(&a2, 0.2);
         a.friends = friends;
 
         a.set_friend_weight(&a2, None).unwrap();
-        assert_eq!(a.friends.get(a2.uuid()), None);
+        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_valid_delete() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<Uuid, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
 
         let a2 = BasicAgent::new();
         a.set_friend_weight(&a2, None).unwrap();
-        assert_eq!(a.friends.get(a2.uuid()), None);
+        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_too_low() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<Uuid, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(a2.uuid.clone(), 0.2);
+        friends.insert(&a2, 0.2);
         a.friends = friends;
 
         let result = a.set_friend_weight(&a2, Some(-0.1));
@@ -1206,13 +1194,13 @@ mod tests {
             Err(_) => assert!(false, "This gave the wrong error"),
         };
 
-        assert_eq!(*a.friends.get(a2.uuid()).unwrap(), 0.2);
+        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.2);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_too_low() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<Uuid, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
         a.friends = friends;
 
@@ -1230,15 +1218,15 @@ mod tests {
             Err(_) => assert!(false, "This gave the wrong error"),
         };
 
-        assert_eq!(a.friends.get(a2.uuid()), None);
+        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_too_high() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<Uuid, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(a2.uuid.clone(), 0.2);
+        friends.insert(&a2, 0.2);
         a.friends = friends;
 
         let result = a.set_friend_weight(&a2, Some(1.1));
@@ -1255,13 +1243,13 @@ mod tests {
             Err(_) => assert!(false, "This gave the wrong error"),
         };
 
-        assert_eq!(*a.friends.get(a2.uuid()).unwrap(), 0.2);
+        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.2);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_too_high() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<Uuid, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
         a.friends = friends;
 
@@ -1279,7 +1267,7 @@ mod tests {
             Err(_) => assert!(false, "This gave the wrong error"),
         };
 
-        assert_eq!(a.friends.get(a2.uuid()), None);
+        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
     }
 
     #[test]

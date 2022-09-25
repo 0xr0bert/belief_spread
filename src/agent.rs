@@ -17,7 +17,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The activation, if found.
-    fn get_activation(&self, time: SimTime, belief: *const dyn Belief) -> Option<f64>;
+    fn get_activation(&self, time: SimTime, belief: &dyn Belief) -> Option<f64>;
 
     /// Gets the activations of an [Agent] towards all [Belief]s at all [SimTime]s.
     ///
@@ -192,15 +192,10 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The weighted relationship.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe and *requires* that both `b1` and `b2` are not
-    /// null pointers. This is not checked safely in the function.
-    unsafe fn weighted_relationship(
+    fn weighted_relationship(
         &self,
         t: SimTime,
-        b1: *const dyn Belief,
+        b1: &dyn Belief,
         b2: *const dyn Belief,
     ) -> Option<f64>;
 
@@ -227,7 +222,7 @@ pub trait Agent: UUIDd {
     unsafe fn contextualise(
         &self,
         t: SimTime,
-        b: *const dyn Belief,
+        b: &dyn Belief,
         beliefs: *const [*const dyn Belief],
     ) -> f64;
 }
@@ -309,9 +304,9 @@ impl Agent for BasicAgent {
     /// a.set_activation(3, &b, Some(0.1));
     /// assert_eq!(a.get_activation(3, &b).unwrap(), 0.1);
     /// ```
-    fn get_activation(&self, time: SimTime, belief: *const dyn Belief) -> Option<f64> {
+    fn get_activation(&self, time: SimTime, belief: &dyn Belief) -> Option<f64> {
         match self.activations.get(&time) {
-            Some(x) => x.get(&belief).cloned(),
+            Some(x) => x.get(&(belief as *const dyn Belief)).cloned(),
             None => None,
         }
     }
@@ -729,19 +724,12 @@ impl Agent for BasicAgent {
     /// b1.set_relationship(&b2, Some(0.5));
     /// a.set_activation(2, &b1, Some(0.5));
     ///
-    /// unsafe {
-    ///     assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.25);
-    /// }
+    /// assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.25);
     /// ```
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe and *requires* that both `b1` and `b2` are not
-    /// null pointers. This is not checked safely in the function.
-    unsafe fn weighted_relationship(
+    fn weighted_relationship(
         &self,
         t: SimTime,
-        b1: *const dyn Belief,
+        b1: &dyn Belief,
         b2: *const dyn Belief,
     ) -> Option<f64> {
         match self.get_activation(t, b1) {
@@ -794,7 +782,7 @@ impl Agent for BasicAgent {
     /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
     /// unsafe {
     ///     assert_eq!(
-    ///         a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+    ///         a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
     ///         -0.125
     ///     );
     /// }
@@ -802,7 +790,7 @@ impl Agent for BasicAgent {
     unsafe fn contextualise(
         &self,
         t: SimTime,
-        b: *const dyn Belief,
+        b: &dyn Belief,
         beliefs: *const [*const dyn Belief],
     ) -> f64 {
         let n_beliefs = (&*beliefs).len();
@@ -1528,9 +1516,7 @@ mod tests {
         a.set_activation(2, &b1, Some(0.5)).unwrap();
         b1.set_relationship(&b2, Some(0.1)).unwrap();
 
-        unsafe {
-            assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.05);
-        }
+        assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.05);
     }
 
     #[test]
@@ -1541,9 +1527,7 @@ mod tests {
 
         b1.set_relationship(&b2, Some(0.1)).unwrap();
 
-        unsafe {
-            assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
-        }
+        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
     }
 
     #[test]
@@ -1554,9 +1538,7 @@ mod tests {
 
         a.set_activation(2, &b1, Some(0.5)).unwrap();
 
-        unsafe {
-            assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
-        }
+        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
     }
 
     #[test]
@@ -1565,9 +1547,7 @@ mod tests {
         let b1 = BasicBelief::new("b1".to_string());
         let b2 = BasicBelief::new("b2".to_string());
 
-        unsafe {
-            assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
-        }
+        assert_eq!(a.weighted_relationship(2, &b1, &b2), None);
     }
 
     #[test]
@@ -1601,7 +1581,7 @@ mod tests {
 
         unsafe {
             assert_eq!(
-                a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+                a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
                 -0.125
             );
         }
@@ -1625,7 +1605,7 @@ mod tests {
 
         unsafe {
             assert_eq!(
-                a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+                a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
                 0.25
             );
         }
@@ -1647,7 +1627,7 @@ mod tests {
 
         unsafe {
             assert_eq!(
-                a.contextualise(2, *beliefs.get(0).unwrap(), beliefs_slice),
+                a.contextualise(2, &**beliefs.get(0).unwrap(), beliefs_slice),
                 0.0
             );
         }

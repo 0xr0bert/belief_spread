@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::{errors::OutOfRangeError, Behaviour, Belief, SimTime, UUIDd};
+use crate::{
+    errors::{OutOfRangeError, UpdateActivationError},
+    Behaviour, Belief, SimTime, UUIDd,
+};
 
 /// An [Agent] which may exist in the model.
 pub trait Agent: UUIDd {
@@ -137,7 +140,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The delta for the [Belief] and this [Agent], if found.
-    fn get_delta(&self, belief: *const dyn Belief) -> Option<f64>;
+    fn get_delta(&self, belief: &dyn Belief) -> Option<f64>;
 
     /// Gets all the deltas for the [Agent].
     ///
@@ -249,6 +252,23 @@ pub trait Agent: UUIDd {
         belief: &dyn Belief,
         beliefs: *const [*const dyn Belief],
     ) -> f64;
+
+    /// Updates the activation for a given `time` and [Belief].
+    ///
+    /// # Arguments
+    /// - `time`: The time as [SimTime].
+    /// - `belief`: The [Belief].
+    /// - `beliefs`: All the [Belief]s in existence.
+    ///
+    /// # Return
+    /// A [Result] with nothing if [Ok], or an [Err] containing
+    /// [UpdateActivationError] if activation is [None] or delta is [None].
+    unsafe fn update_activation(
+        &mut self,
+        time: SimTime,
+        belief: *const dyn Belief,
+        beliefs: *const [*const dyn Belief],
+    ) -> Result<(), UpdateActivationError>;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -636,8 +656,8 @@ impl Agent for BasicAgent {
     /// a.set_delta(&b, Some(0.1)).unwrap();
     /// assert_eq!(a.get_delta(&b).unwrap(), 0.1);
     /// ```
-    fn get_delta(&self, belief: *const dyn Belief) -> Option<f64> {
-        self.deltas.get(&belief).cloned()
+    fn get_delta(&self, belief: &dyn Belief) -> Option<f64> {
+        self.deltas.get(&(belief as *const dyn Belief)).cloned()
     }
 
     /// Gets all the deltas for the [Agent].
@@ -960,6 +980,49 @@ impl Agent for BasicAgent {
         match self.pressure(time, belief) {
             p if p > 0.0 => (1.0 + self.contextualise(time, belief, beliefs)) / 2.0 * p,
             p => (1.0 - self.contextualise(time, belief, beliefs)) / 2.0 * p,
+        }
+    }
+
+    /// Updates the activation for a given `time` and [Belief].
+    ///
+    /// # Arguments
+    /// - `time`: The time as [SimTime].
+    /// - `belief`: The [Belief].
+    /// - `beliefs`: All the [Belief]s in existence.
+    ///
+    /// # Safety
+    /// `belief` *must* exist or this function will cause undefined behaviour /
+    /// fail spectacularly.
+    ///
+    /// # Return
+    /// A [Result] with nothing if [Ok], or an [Err] containing
+    /// [UpdateActivationError] if activation is [None] or delta is [None].
+    unsafe fn update_activation(
+        &mut self,
+        time: SimTime,
+        belief: *const dyn Belief,
+        beliefs: *const [*const dyn Belief],
+    ) -> Result<(), UpdateActivationError> {
+        match self.get_delta(&*belief) {
+            None => Err(UpdateActivationError::GetDeltaNone { belief }),
+            Some(d) => {
+                match self.get_activation(time - 1, &*belief) {
+                    None => Err(UpdateActivationError::GetActivationNone { time, belief }),
+                    Some(a) => {
+                        self.set_activation(
+                            time,
+                            belief,
+                            Some((-1.0_f64).max(
+                                (1.0_f64).min(
+                                    d * a + self.activation_change(time - 1, &*belief, beliefs),
+                                ),
+                            )),
+                        )
+                        .unwrap();
+                        Ok(())
+                    }
+                }
+            }
         }
     }
 }

@@ -230,6 +230,25 @@ pub trait Agent: UUIDd {
     /// # Returns
     /// The pressure
     fn pressure(&self, time: SimTime, belief: &dyn Belief) -> f64;
+
+    /// Gets the change in activation for the [Agent] as a result of the
+    /// [Behaviour]s observed.
+    ///
+    /// This takes into account the beliefs that the agent already holds
+    ///
+    /// # Arguments
+    /// - `time`: The time as [SimTime].
+    /// - `belief`: The [Belief].
+    /// - `beliefs`: All the [Belief]s in existence.
+    ///
+    /// # Return
+    /// - The change in activation
+    fn activation_change(
+        &self,
+        time: SimTime,
+        belief: &dyn Belief,
+        beliefs: *const [*const dyn Belief],
+    ) -> f64;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -876,6 +895,73 @@ impl Agent for BasicAgent {
             }
         }
     }
+
+    /// Gets the change in activation for the [Agent] as a result of the
+    /// [Behaviour]s observed.
+    ///
+    /// This takes into account the beliefs that the agent already holds
+    ///
+    /// # Arguments
+    /// - `time`: The time as [SimTime].
+    /// - `belief`: The [Belief].
+    /// - `beliefs`: All the [Belief]s in existence. If this is null,
+    /// the function returns 0.
+    ///
+    /// # Return
+    /// - The change in activation
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, BasicBelief, Belief};
+    /// use float_cmp::approx_eq;
+    ///
+    /// let mut agent = BasicAgent::new();
+    /// let mut f1 = BasicAgent::new();
+    /// let mut f2 = BasicAgent::new();
+    /// let b1 = BasicBehaviour::new("b1".to_string());
+    /// let b2 = BasicBehaviour::new("b2".to_string());
+    ///
+    /// f1.set_action(2, Some(&b1));
+    /// f2.set_action(2, Some(&b2));
+    ///
+    /// let mut belief = BasicBelief::new("b1".to_string());
+    /// belief.set_perception(&b1, Some(0.2)).unwrap();
+    /// belief.set_perception(&b2, Some(0.3)).unwrap();
+    ///
+    /// agent.set_friend_weight(&f1, Some(0.5));
+    /// agent.set_friend_weight(&f2, Some(1.0));
+    /// // Pressure is 0.2
+    ///
+    /// let belief2 = BasicBelief::new("b2".to_string());
+    /// let mut beliefs = Vec::<*const dyn Belief>::new();
+    /// beliefs.push(&belief);
+    /// beliefs.push(&belief2);
+    /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
+    ///
+    /// agent.set_activation(2, &belief, Some(1.0)).unwrap();
+    /// agent.set_activation(2, &belief2, Some(1.0)).unwrap();
+    /// belief.set_relationship(&belief, Some(0.5)).unwrap();
+    /// belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+    /// // Contextualise is -0.125
+    ///
+    /// assert!(approx_eq!(
+    ///     f64,
+    ///     agent.activation_change(2, &belief, beliefs_slice),
+    ///     0.0875,
+    ///     ulps = 2
+    /// ))
+    fn activation_change(
+        &self,
+        time: SimTime,
+        belief: &dyn Belief,
+        beliefs: *const [*const dyn Belief],
+    ) -> f64 {
+        match self.pressure(time, belief) {
+            p if p > 0.0 => (1.0 + self.contextualise(time, belief, beliefs)) / 2.0 * p,
+            p => (1.0 - self.contextualise(time, belief, beliefs)) / 2.0 * p,
+        }
+    }
 }
 
 impl UUIDd for BasicAgent {
@@ -893,6 +979,8 @@ impl UUIDd for BasicAgent {
 #[cfg(test)]
 mod tests {
     use std::ptr::{null, slice_from_raw_parts};
+
+    use float_cmp::approx_eq;
 
     use crate::{BasicBehaviour, BasicBelief};
 
@@ -1796,5 +1884,48 @@ mod tests {
 
         agent.friends = friends;
         assert_eq!(agent.pressure(2, &belief), 0.4 / 3.0);
+    }
+
+    #[test]
+    fn activation_change_when_pressure_positive() {
+        let mut agent = BasicAgent::new();
+        let mut f1 = BasicAgent::new();
+        let mut f2 = BasicAgent::new();
+        let b1 = BasicBehaviour::new("b1".to_string());
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        f1.set_action(2, Some(&b1));
+        f2.set_action(2, Some(&b2));
+
+        let mut belief = BasicBelief::new("b1".to_string());
+        belief.set_perception(&b1, Some(0.2)).unwrap();
+        belief.set_perception(&b2, Some(0.3)).unwrap();
+
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        agent.friends = friends;
+        // Pressure is 0.2
+
+        let belief2 = BasicBelief::new("b2".to_string());
+        let mut beliefs = Vec::<*const dyn Belief>::new();
+        beliefs.push(&belief);
+        beliefs.push(&belief2);
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        agent.set_activation(2, &belief, Some(1.0)).unwrap();
+        agent.set_activation(2, &belief2, Some(1.0)).unwrap();
+        belief.set_relationship(&belief, Some(0.5)).unwrap();
+        belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+        // Contextualise is -0.125
+
+        assert!(approx_eq!(
+            f64,
+            agent.activation_change(2, &belief, beliefs_slice),
+            0.0875,
+            ulps = 2
+        ))
     }
 }

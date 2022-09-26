@@ -21,7 +21,7 @@ pub trait Belief: Named + UUIDd {
     ///
     /// # Returns
     /// The value, if found.
-    fn get_perception(&self, behaviour: &dyn Behaviour) -> Option<f64>;
+    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64>;
 
     /// Sets the perception.
     ///
@@ -41,7 +41,7 @@ pub trait Belief: Named + UUIDd {
     /// [OutOfRangeError], if the perception is not in range [-1, +1].
     fn set_perception(
         &mut self,
-        behaviour: &dyn Behaviour,
+        behaviour: *const dyn Behaviour,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -58,7 +58,7 @@ pub trait Belief: Named + UUIDd {
     ///
     /// # Returns
     /// The value, if found.
-    fn get_relationship(&self, belief: &dyn Belief) -> Option<f64>;
+    fn get_relationship(&self, belief: *const dyn Belief) -> Option<f64>;
 
     /// Sets the relationship.
     ///
@@ -79,7 +79,7 @@ pub trait Belief: Named + UUIDd {
     /// [OutOfRangeError], if the relationship is not in range [-1, +1].
     fn set_relationship(
         &mut self,
-        belief: &dyn Belief,
+        belief: *const dyn Belief,
         relationship: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 }
@@ -89,8 +89,8 @@ pub trait Belief: Named + UUIDd {
 pub struct BasicBelief {
     name: String,
     uuid: Uuid,
-    perception: HashMap<Uuid, f64>,
-    relationship: HashMap<Uuid, f64>,
+    perception: HashMap<*const dyn Behaviour, f64>,
+    relationship: HashMap<*const dyn Belief, f64>,
 }
 
 impl BasicBelief {
@@ -164,8 +164,8 @@ impl Belief for BasicBelief {
     /// b.set_perception(&behaviour, Some(0.1));
     /// assert_eq!(b.get_perception(&behaviour).unwrap(), 0.1);
     /// ```
-    fn get_perception(&self, behaviour: &dyn Behaviour) -> Option<f64> {
-        self.perception.get(behaviour.uuid()).cloned()
+    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64> {
+        self.perception.get(&behaviour).cloned()
     }
 
     /// Sets the perception.
@@ -196,12 +196,12 @@ impl Belief for BasicBelief {
     /// ```
     fn set_perception(
         &mut self,
-        behaviour: &dyn Behaviour,
+        behaviour: *const dyn Behaviour,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match perception {
             None => {
-                self.perception.remove(behaviour.uuid());
+                self.perception.remove(&behaviour);
                 Ok(())
             }
             Some(x) if x > 1.0 => Err(OutOfRangeError::TooHigh {
@@ -215,7 +215,7 @@ impl Belief for BasicBelief {
                 max: 1.0,
             }),
             Some(x) => {
-                self.perception.insert(behaviour.uuid().clone(), x);
+                self.perception.insert(behaviour, x);
                 Ok(())
             }
         }
@@ -245,8 +245,8 @@ impl Belief for BasicBelief {
     /// b.set_relationship(&b2, Some(0.1));
     /// assert_eq!(b.get_relationship(&b2).unwrap(), 0.1);
     /// ```
-    fn get_relationship(&self, belief: &dyn Belief) -> Option<f64> {
-        self.relationship.get(belief.uuid()).cloned()
+    fn get_relationship(&self, belief: *const dyn Belief) -> Option<f64> {
+        self.relationship.get(&belief).cloned()
     }
 
     /// Sets the relationship.
@@ -267,23 +267,6 @@ impl Belief for BasicBelief {
     /// A [Result], [Ok] if nothing is wrong, or an [Err] with a
     /// [OutOfRangeError], if the relationship is not in range [-1, +1].
     ///
-    /// # Warning
-    ///
-    /// If belief is the same belief, you'll get into errors with two references.
-    ///
-    /// A nasty hack is to do something like so:
-    ///
-    /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, UUIDd, Named};
-    ///
-    /// let mut b = BasicBelief::new("Belief 1".to_string());
-    /// let b_cl = BasicBelief::new_with_uuid(b.name().to_string(), b.uuid().clone());
-    /// b.set_relationship(&b_cl, Some(0.1));
-    /// assert_eq!(b.get_relationship(&b).unwrap(), 0.1);
-    /// ```
-    ///
-    /// This works as only the UUID is stored in the underlying datastructure.
-    ///
     /// # Examples
     ///
     /// ```
@@ -296,12 +279,12 @@ impl Belief for BasicBelief {
     /// ```
     fn set_relationship(
         &mut self,
-        belief: &dyn Belief,
+        belief: *const dyn Belief,
         relationship: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match relationship {
             None => {
-                self.relationship.remove(belief.uuid());
+                self.relationship.remove(&belief);
                 Ok(())
             }
             Some(x) if x > 1.0 => Err(OutOfRangeError::TooHigh {
@@ -315,7 +298,7 @@ impl Belief for BasicBelief {
                 max: 1.0,
             }),
             Some(x) => {
-                self.relationship.insert(belief.uuid().clone(), x);
+                self.relationship.insert(belief, x);
                 Ok(())
             }
         }
@@ -421,8 +404,8 @@ mod tests {
     #[test]
     fn set_when_valid_and_get_relationship_when_exists() {
         let mut b = BasicBelief::new("belief".to_string());
-        assert!(!b.set_relationship(&b.clone(), Some(0.2)).is_err());
-        assert_eq!(b.get_relationship(&b.clone()).unwrap(), 0.2);
+        assert!(!b.set_relationship(&b, Some(0.2)).is_err());
+        assert_eq!(b.get_relationship(&b).unwrap(), 0.2);
     }
 
     #[test]
@@ -434,10 +417,10 @@ mod tests {
     #[test]
     fn set_delete_when_valid_and_get_relationship_when_not_exists() {
         let mut b = BasicBelief::new("belief".to_string());
-        assert!(!b.set_relationship(&b.clone(), Some(0.2)).is_err());
-        assert_eq!(b.get_relationship(&b.clone()).unwrap(), 0.2);
-        assert!(!b.set_relationship(&b.clone(), None).is_err());
-        assert_eq!(b.get_relationship(&b.clone()), None);
+        assert!(!b.set_relationship(&b, Some(0.2)).is_err());
+        assert_eq!(b.get_relationship(&b).unwrap(), 0.2);
+        assert!(!b.set_relationship(&b, None).is_err());
+        assert_eq!(b.get_relationship(&b), None);
     }
 
     #[test]

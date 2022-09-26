@@ -216,6 +216,20 @@ pub trait Agent: UUIDd {
     /// The context.
     fn contextualise(&self, t: SimTime, b: &dyn Belief, beliefs: *const [*const dyn Belief])
         -> f64;
+
+    /// Gets the pressure the [Agent] feels to adopt a [Belief] given the
+    /// actions of their friends.
+    ///
+    /// This does not take into account the beliefs that the [Agent] already
+    /// holds.
+    ///
+    /// # Arguments
+    /// - `time`: The time as [SimTime].
+    /// - `belief`: The [Belief].
+    ///
+    /// # Returns
+    /// The pressure
+    fn pressure(&self, time: SimTime, belief: &dyn Belief) -> f64;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -575,7 +589,7 @@ impl Agent for BasicAgent {
     /// ```
     fn set_action(&mut self, time: SimTime, behaviour: Option<*const dyn Behaviour>) {
         match behaviour {
-            Some(x) => self.actions.insert(time, x.clone()),
+            Some(x) => self.actions.insert(time, x),
             None => self.actions.remove(&time),
         };
     }
@@ -796,6 +810,69 @@ impl Agent for BasicAgent {
                             / (size as f64)
                     }
                 },
+            }
+        }
+    }
+
+    /// Gets the pressure the [Agent] feels to adopt a [Belief] given the
+    /// actions of their friends.
+    ///
+    /// This does not take into account the beliefs that the [Agent] already
+    /// holds.
+    ///
+    /// # Arguments
+    /// - `time`: The time as [SimTime].
+    /// - `belief`: The [Belief].
+    ///
+    /// # Returns
+    /// The pressure
+    ///
+    /// # Safety
+    /// Null friends are ignored.
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, BasicBelief, Belief};
+    /// use std::collections::HashMap;
+    ///
+    /// let mut agent = BasicAgent::new();
+    /// let mut f1 = BasicAgent::new();
+    /// let mut f2 = BasicAgent::new();
+    /// let b1 = BasicBehaviour::new("b1".to_string());
+    /// let b2 = BasicBehaviour::new("b2".to_string());
+    ///
+    /// f1.set_action(2, Some(&b1));
+    /// f2.set_action(2, Some(&b2));
+    ///
+    /// let mut belief = BasicBelief::new("b1".to_string());
+    /// belief.set_perception(&b1, Some(0.2)).unwrap();
+    /// belief.set_perception(&b2, Some(0.3)).unwrap();
+    ///
+    /// agent.set_friend_weight(&f1, Some(0.5));
+    /// agent.set_friend_weight(&f2, Some(1.0));
+    ///
+    /// assert_eq!(agent.pressure(2, &belief), 0.2);
+    /// ```
+    fn pressure(&self, time: SimTime, belief: &dyn Belief) -> f64 {
+        match self.friends.len() {
+            0 => 0.0,
+            n => {
+                self.friends
+                    .iter()
+                    .map(|(&a, w)| unsafe {
+                        match a.as_ref() {
+                            Some(a_ref) => a_ref
+                                .get_action(time)
+                                .map(|behaviour| {
+                                    belief.get_perception(behaviour).unwrap_or_else(|| 0.0)
+                                })
+                                .map(|v| w * v),
+                            None => None,
+                        }
+                    })
+                    .flatten()
+                    .sum::<f64>()
+                    / (n as f64)
             }
         }
     }
@@ -1619,5 +1696,105 @@ mod tests {
         let beliefs_slice: &[*const dyn Belief] = &beliefs;
 
         assert_eq!(a.contextualise(2, &b1, beliefs_slice), 0.0);
+    }
+
+    #[test]
+    fn pressure_when_no_friends() {
+        let mut agent = BasicAgent::new();
+        let belief = BasicBelief::new("b1".to_string());
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        agent.friends = friends;
+        assert_eq!(agent.pressure(2, &belief), 0.0);
+    }
+
+    #[test]
+    fn pressure_when_friends_did_nothing() {
+        let mut agent = BasicAgent::new();
+        let f1 = BasicAgent::new();
+        let f2 = BasicAgent::new();
+
+        let belief = BasicBelief::new("b1".to_string());
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&agent, 0.2);
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        agent.friends = friends;
+        assert_eq!(agent.pressure(2, &belief), 0.0);
+    }
+
+    #[test]
+    fn pressure_when_friends_did_something_but_perception_null() {
+        let mut agent = BasicAgent::new();
+        let mut f1 = BasicAgent::new();
+        let mut f2 = BasicAgent::new();
+        let b1 = BasicBehaviour::new("b1".to_string());
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        f1.set_action(2, Some(&b1));
+        f2.set_action(2, Some(&b2));
+
+        let belief = BasicBelief::new("b1".to_string());
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&agent, 0.2);
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        agent.friends = friends;
+        assert_eq!(agent.pressure(2, &belief), 0.0);
+    }
+
+    #[test]
+    fn pressure_when_friends_did_something() {
+        let mut agent = BasicAgent::new();
+        let mut f1 = BasicAgent::new();
+        let mut f2 = BasicAgent::new();
+        let b1 = BasicBehaviour::new("b1".to_string());
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        f1.set_action(2, Some(&b1));
+        f2.set_action(2, Some(&b2));
+
+        let mut belief = BasicBelief::new("b1".to_string());
+        belief.set_perception(&b1, Some(0.2)).unwrap();
+        belief.set_perception(&b2, Some(0.3)).unwrap();
+
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        agent.friends = friends;
+        assert_eq!(agent.pressure(2, &belief), 0.2);
+    }
+
+    #[test]
+    fn pressure_when_friends_did_something_but_some_null() {
+        let mut agent = BasicAgent::new();
+        let mut f1 = BasicAgent::new();
+        let mut f2 = BasicAgent::new();
+        let b1 = BasicBehaviour::new("b1".to_string());
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        f1.set_action(2, Some(&b1));
+        f2.set_action(2, Some(&b2));
+
+        let mut belief = BasicBelief::new("b1".to_string());
+        belief.set_perception(&b1, Some(0.2)).unwrap();
+        belief.set_perception(&b2, Some(0.3)).unwrap();
+
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        let f3_ref: *const BasicAgent = null();
+
+        friends.insert(f3_ref, 0.2);
+
+        agent.friends = friends;
+        assert_eq!(agent.pressure(2, &belief), 0.4 / 3.0);
     }
 }

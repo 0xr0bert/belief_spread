@@ -1269,11 +1269,10 @@ mod tests {
             min: -1.0,
             max: 1.0,
         };
-        match a.set_activation(2, &b, Some(-1.1)) {
-            Ok(()) => assert!(false, "This should have errored!"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "Wrong error"),
-        }
+        assert_eq!(
+            a.set_activation(2, &b, Some(-1.1)).unwrap_err(),
+            expected_error
+        );
     }
 
     #[test]
@@ -1285,11 +1284,10 @@ mod tests {
             min: -1.0,
             max: 1.0,
         };
-        match a.set_activation(2, &b, Some(1.1)) {
-            Ok(()) => assert!(false, "This should have errored!"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "Wrong error"),
-        }
+        assert_eq!(
+            a.set_activation(2, &b, Some(1.1)).unwrap_err(),
+            expected_error
+        );
     }
 
     #[test]
@@ -1457,11 +1455,7 @@ mod tests {
             max: 1.0,
         };
 
-        match result {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This gave the wrong error"),
-        };
+        assert_eq!(result.unwrap_err(), expected_error);
 
         assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.2);
     }
@@ -1481,11 +1475,7 @@ mod tests {
             max: 1.0,
         };
 
-        match result {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This gave the wrong error"),
-        };
+        assert_eq!(result.unwrap_err(), expected_error);
 
         assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
     }
@@ -1506,11 +1496,7 @@ mod tests {
             max: 1.0,
         };
 
-        match result {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This gave the wrong error"),
-        };
+        assert_eq!(result.unwrap_err(), expected_error);
 
         assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.2);
     }
@@ -1530,11 +1516,7 @@ mod tests {
             max: 1.0,
         };
 
-        match result {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This gave the wrong error"),
-        };
+        assert_eq!(result.unwrap_err(), expected_error);
 
         assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
     }
@@ -1752,11 +1734,7 @@ mod tests {
             max: f64::INFINITY,
         };
 
-        match result {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This errored the wrong thing!"),
-        }
+        assert_eq!(result.unwrap_err(), expected_error);
 
         assert_eq!(*a.deltas.get(&(&b as *const dyn Belief)).unwrap(), 0.2);
     }
@@ -1776,11 +1754,7 @@ mod tests {
             max: f64::INFINITY,
         };
 
-        match result {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This errored the wrong thing!"),
-        }
+        assert_eq!(result.unwrap_err(), expected_error);
 
         assert_eq!(a.deltas.get(&(&b as *const dyn Belief)), None);
     }
@@ -2107,11 +2081,12 @@ mod tests {
         };
 
         unsafe {
-            match agent.update_activation(2, &belief, beliefs_slice) {
-                Ok(()) => assert!(false, "This should have errored"),
-                Err(x) if x == expected_error => assert!(true),
-                Err(_) => assert!(false, "This errored the wrong thing"),
-            };
+            assert_eq!(
+                agent
+                    .update_activation(2, &belief, beliefs_slice)
+                    .unwrap_err(),
+                expected_error
+            );
         }
     }
 
@@ -2125,11 +2100,12 @@ mod tests {
         let expected_error = UpdateActivationError::GetDeltaNone { belief: &belief };
 
         unsafe {
-            match agent.update_activation(2, &belief, beliefs_slice) {
-                Ok(()) => assert!(false, "This should have errored"),
-                Err(x) if x == expected_error => assert!(true),
-                Err(_) => assert!(false, "This errored the wrong thing"),
-            };
+            assert_eq!(
+                agent
+                    .update_activation(2, &belief, beliefs_slice)
+                    .unwrap_err(),
+                expected_error
+            );
         }
     }
 

@@ -2034,4 +2034,223 @@ mod tests {
             ulps = 2
         ))
     }
+
+    #[test]
+    fn update_activation_when_previous_activation_none() {
+        let mut agent = BasicAgent::new();
+        let belief = BasicBelief::new("b1".to_string());
+        let beliefs: Vec<*const dyn Belief> = Vec::new();
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        let mut deltas: HashMap<*const dyn Belief, f64> = HashMap::new();
+        deltas.insert(&belief, 1.1);
+
+        agent.deltas = deltas;
+
+        let expected_error = UpdateActivationError::GetActivationNone {
+            time: 2,
+            belief: &belief,
+        };
+
+        unsafe {
+            match agent.update_activation(2, &belief, beliefs_slice) {
+                Ok(()) => assert!(false, "This should have errored"),
+                Err(x) if x == expected_error => assert!(true),
+                Err(_) => assert!(false, "This errored the wrong thing"),
+            };
+        }
+    }
+
+    #[test]
+    fn update_activation_when_delta_none() {
+        let mut agent = BasicAgent::new();
+        let belief = BasicBelief::new("b1".to_string());
+        let beliefs: Vec<*const dyn Belief> = Vec::new();
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        let expected_error = UpdateActivationError::GetDeltaNone { belief: &belief };
+
+        unsafe {
+            match agent.update_activation(2, &belief, beliefs_slice) {
+                Ok(()) => assert!(false, "This should have errored"),
+                Err(x) if x == expected_error => assert!(true),
+                Err(_) => assert!(false, "This errored the wrong thing"),
+            };
+        }
+    }
+
+    #[test]
+    fn update_activation_when_new_value_in_range() {
+        let mut agent = BasicAgent::new();
+        let mut f1 = BasicAgent::new();
+        let mut f2 = BasicAgent::new();
+        let b1 = BasicBehaviour::new("b1".to_string());
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        f1.set_action(2, Some(&b1));
+        f2.set_action(2, Some(&b2));
+
+        let mut belief = BasicBelief::new("b1".to_string());
+        belief.set_perception(&b1, Some(0.2)).unwrap();
+        belief.set_perception(&b2, Some(0.3)).unwrap();
+
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        agent.friends = friends;
+        // Pressure is 0.2
+
+        let belief2 = BasicBelief::new("b2".to_string());
+        let mut beliefs = Vec::<*const dyn Belief>::new();
+        beliefs.push(&belief);
+        beliefs.push(&belief2);
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        agent.set_activation(2, &belief, Some(0.5)).unwrap();
+        agent.set_activation(2, &belief2, Some(1.0)).unwrap();
+        belief.set_relationship(&belief, Some(1.0)).unwrap();
+        belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+        // Contextualise is -0.0625
+
+        // activation_change is 0.10625
+        let mut delta: HashMap<*const dyn Belief, f64> = HashMap::new();
+        delta.insert(&belief, 1.1);
+        agent.deltas = delta;
+
+        unsafe {
+            agent.update_activation(3, &belief, beliefs_slice).unwrap();
+        }
+
+        assert!(approx_eq!(
+            f64,
+            *agent
+                .activations
+                .get(&3)
+                .unwrap()
+                .get(&(&belief as *const dyn Belief))
+                .unwrap(),
+            0.65625,
+            ulps = 4
+        ))
+    }
+
+    #[test]
+    fn update_activation_when_new_value_too_high() {
+        let mut agent = BasicAgent::new();
+        let mut f1 = BasicAgent::new();
+        let mut f2 = BasicAgent::new();
+        let b1 = BasicBehaviour::new("b1".to_string());
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        f1.set_action(2, Some(&b1));
+        f2.set_action(2, Some(&b2));
+
+        let mut belief = BasicBelief::new("b1".to_string());
+        belief.set_perception(&b1, Some(0.2)).unwrap();
+        belief.set_perception(&b2, Some(0.3)).unwrap();
+
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        agent.friends = friends;
+        // Pressure is 0.2
+
+        let belief2 = BasicBelief::new("b2".to_string());
+        let mut beliefs = Vec::<*const dyn Belief>::new();
+        beliefs.push(&belief);
+        beliefs.push(&belief2);
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        agent.set_activation(2, &belief, Some(0.5)).unwrap();
+        agent.set_activation(2, &belief2, Some(1.0)).unwrap();
+        belief.set_relationship(&belief, Some(1.0)).unwrap();
+        belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+        // Contextualise is -0.0625
+
+        // activation_change is 0.10625
+        let mut delta: HashMap<*const dyn Belief, f64> = HashMap::new();
+        delta.insert(&belief, 100000.0);
+        agent.deltas = delta;
+
+        unsafe {
+            agent.update_activation(3, &belief, beliefs_slice).unwrap();
+        }
+
+        assert!(approx_eq!(
+            f64,
+            *agent
+                .activations
+                .get(&3)
+                .unwrap()
+                .get(&(&belief as *const dyn Belief))
+                .unwrap(),
+            1.0,
+            ulps = 4
+        ))
+    }
+
+    #[test]
+    fn update_activation_when_new_value_too_low() {
+        let mut agent = BasicAgent::new();
+        let mut f1 = BasicAgent::new();
+        let mut f2 = BasicAgent::new();
+        let b1 = BasicBehaviour::new("b1".to_string());
+        let b2 = BasicBehaviour::new("b2".to_string());
+
+        f1.set_action(2, Some(&b1));
+        f2.set_action(2, Some(&b2));
+
+        let mut belief = BasicBelief::new("b1".to_string());
+        belief.set_perception(&b1, Some(0.2)).unwrap();
+        belief.set_perception(&b2, Some(0.3)).unwrap();
+
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+
+        friends.insert(&f1, 0.5);
+        friends.insert(&f2, 1.0);
+
+        agent.friends = friends;
+        // Pressure is 0.2
+
+        let belief2 = BasicBelief::new("b2".to_string());
+        let mut beliefs = Vec::<*const dyn Belief>::new();
+        beliefs.push(&belief);
+        beliefs.push(&belief2);
+        let beliefs_slice: &[*const dyn Belief] = &beliefs;
+
+        agent.set_activation(2, &belief, Some(0.5)).unwrap();
+        agent.set_activation(2, &belief2, Some(1.0)).unwrap();
+        belief.set_relationship(&belief, Some(1.0)).unwrap();
+        belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+        // Contextualise is -0.0625
+
+        // activation_change is 0.10625
+        let mut delta: HashMap<*const dyn Belief, f64> = HashMap::new();
+
+        // This is a total cheat to force activation really low, officially
+        // delta cannot be less than 0, but it doesn't matter.
+
+        delta.insert(&belief, -100000.0);
+        agent.deltas = delta;
+
+        unsafe {
+            agent.update_activation(3, &belief, beliefs_slice).unwrap();
+        }
+
+        assert!(approx_eq!(
+            f64,
+            *agent
+                .activations
+                .get(&3)
+                .unwrap()
+                .get(&(&belief as *const dyn Belief))
+                .unwrap(),
+            -1.0,
+            ulps = 4
+        ))
+    }
 }

@@ -14,7 +14,7 @@ pub enum OutOfRangeError {
     TooHigh { found: f64, min: f64, max: f64 },
 }
 
-/// An error for [`Agent::update_activation`].
+/// An error for [`crate::Agent::update_activation`].
 #[derive(Error, Debug, PartialEq)]
 pub enum UpdateActivationError {
     /// When the activation for a [Belief] at a [SimTime] is [None].

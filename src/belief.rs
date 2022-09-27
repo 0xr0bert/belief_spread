@@ -432,11 +432,7 @@ mod tests {
             min: -1.0,
             max: 1.0,
         };
-        match res {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This erorred the wrong thing!"),
-        };
+        assert_eq!(res.unwrap_err(), expected_error);
     }
 
     #[test]
@@ -448,11 +444,7 @@ mod tests {
             min: -1.0,
             max: 1.0,
         };
-        match res {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This erorred the wrong thing!"),
-        };
+        assert_eq!(res.unwrap_err(), expected_error);
     }
 
     #[test]
@@ -490,11 +482,7 @@ mod tests {
             min: -1.0,
             max: 1.0,
         };
-        match res {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This erorred the wrong thing!"),
-        };
+        assert_eq!(res.unwrap_err(), expected_error);
     }
 
     #[test]
@@ -507,11 +495,8 @@ mod tests {
             min: -1.0,
             max: 1.0,
         };
-        match res {
-            Ok(()) => assert!(false, "This should have errored"),
-            Err(x) if x == expected_error => assert!(true),
-            Err(_) => assert!(false, "This erorred the wrong thing!"),
-        };
+
+        assert_eq!(res.unwrap_err(), expected_error);
     }
 
     #[test]

@@ -1,3 +1,4 @@
+//! A library for modelling how beliefs spread through social networks.
 mod agent;
 mod behaviour;
 mod belief;

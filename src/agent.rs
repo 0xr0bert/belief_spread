@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::{OutOfRangeError, UpdateActivationError},
-    Behaviour, Belief, SimTime, UUIDd,
+    Behaviour, BehaviourPtr, Belief, BeliefPtr, SimTime, UUIDd,
 };
 
 /// An [Agent] which may exist in the model.
@@ -20,7 +20,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The activation, if found.
-    fn get_activation(&self, time: SimTime, belief: &dyn Belief) -> Option<f64>;
+    fn get_activation(&self, time: SimTime, belief: &BeliefPtr) -> Option<f64>;
 
     /// Gets the activations of an [Agent] towards all [Belief]s at all [SimTime]s.
     ///
@@ -31,7 +31,7 @@ pub trait Agent: UUIDd {
     /// # Return
     /// A map from simulation time to a new map from [Belief] to the
     /// activation.
-    fn get_activations(&self) -> &HashMap<SimTime, HashMap<*const dyn Belief, f64>>;
+    fn get_activations(&self) -> &HashMap<SimTime, HashMap<BeliefPtr, f64>>;
 
     /// Sets the activation of an [Agent] towards a [Belief] at a given [SimTime].
     ///
@@ -50,7 +50,7 @@ pub trait Agent: UUIDd {
     fn set_activation(
         &mut self,
         time: SimTime,
-        belief: *const dyn Belief,
+        belief: BeliefPtr,
         activation: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -111,13 +111,13 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The [Behaviour], if one was performed at `time`.
-    fn get_action(&self, time: SimTime) -> Option<*const dyn Behaviour>;
+    fn get_action(&self, time: SimTime) -> Option<&BehaviourPtr>;
 
     /// Gets all of the [Behaviour]s that the [Agent] has performed.
     ///
     /// # Returns
     /// A [HashMap] from [SimTime] to [Behaviour].
-    fn get_actions(&self) -> &HashMap<SimTime, *const dyn Behaviour>;
+    fn get_actions(&self) -> &HashMap<SimTime, BehaviourPtr>;
 
     /// Sets the [Behaviour] the [Agent] performed at a given time.
     ///
@@ -126,7 +126,7 @@ pub trait Agent: UUIDd {
     /// # Arguments
     /// - `time`: The [SimTime].
     /// - `behaviour`: The new [Behaviour] that was performed at `time`.
-    fn set_action(&mut self, time: SimTime, behaviour: Option<*const dyn Behaviour>);
+    fn set_action(&mut self, time: SimTime, behaviour: Option<BehaviourPtr>);
 
     /// Gets the delta for a given [Belief].
     ///
@@ -140,7 +140,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The delta for the [Belief] and this [Agent], if found.
-    fn get_delta(&self, belief: &dyn Belief) -> Option<f64>;
+    fn get_delta(&self, belief: &BeliefPtr) -> Option<f64>;
 
     /// Gets all the deltas for the [Agent].
     ///
@@ -151,7 +151,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// A map from [Belief] to delta.
-    fn get_deltas(&self) -> &HashMap<*const dyn Belief, f64>;
+    fn get_deltas(&self) -> &HashMap<BeliefPtr, f64>;
 
     /// Sets the delta for a given [Belief].
     ///
@@ -169,11 +169,7 @@ pub trait Agent: UUIDd {
     /// # Returns
     /// A [Result], [Ok] if nothing is wrong, or an [Err] with a
     /// [OutOfRangeError], if the delta is not strictly positive.
-    fn set_delta(
-        &mut self,
-        belief: *const dyn Belief,
-        delta: Option<f64>,
-    ) -> Result<(), OutOfRangeError>;
+    fn set_delta(&mut self, belief: BeliefPtr, delta: Option<f64>) -> Result<(), OutOfRangeError>;
 
     /// Gets the weighted relationship between [Belief]s `b1` and `b2`.
     ///
@@ -195,12 +191,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The weighted relationship.
-    fn weighted_relationship(
-        &self,
-        t: SimTime,
-        b1: &dyn Belief,
-        b2: *const dyn Belief,
-    ) -> Option<f64>;
+    fn weighted_relationship(&self, t: SimTime, b1: &BeliefPtr, b2: &BeliefPtr) -> Option<f64>;
 
     /// Gets the context for holding the [Belief] `b`.
     ///
@@ -217,8 +208,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The context.
-    fn contextualise(&self, t: SimTime, b: &dyn Belief, beliefs: *const [*const dyn Belief])
-        -> f64;
+    fn contextualise(&self, t: SimTime, b: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64;
 
     /// Gets the pressure the [Agent] feels to adopt a [Belief] given the
     /// actions of their friends.
@@ -232,7 +222,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The pressure
-    fn pressure(&self, time: SimTime, belief: &dyn Belief) -> f64;
+    fn pressure(&self, time: SimTime, belief: &BeliefPtr) -> f64;
 
     /// Gets the change in activation for the [Agent] as a result of the
     /// [Behaviour]s observed.
@@ -246,12 +236,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Return
     /// - The change in activation
-    fn activation_change(
-        &self,
-        time: SimTime,
-        belief: &dyn Belief,
-        beliefs: *const [*const dyn Belief],
-    ) -> f64;
+    fn activation_change(&self, time: SimTime, belief: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64;
 
     /// Updates the activation for a given `time` and [Belief].
     ///
@@ -263,21 +248,21 @@ pub trait Agent: UUIDd {
     /// # Return
     /// A [Result] with nothing if [Ok], or an [Err] containing
     /// [UpdateActivationError] if activation is [None] or delta is [None].
-    unsafe fn update_activation(
+    fn update_activation(
         &mut self,
         time: SimTime,
-        belief: *const dyn Belief,
-        beliefs: *const [*const dyn Belief],
+        belief: &BeliefPtr,
+        beliefs: &[BeliefPtr],
     ) -> Result<(), UpdateActivationError>;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
 pub struct BasicAgent {
     uuid: Uuid,
-    activations: HashMap<SimTime, HashMap<*const dyn Belief, f64>>,
+    activations: HashMap<SimTime, HashMap<BeliefPtr, f64>>,
     friends: HashMap<*const dyn Agent, f64>,
-    actions: HashMap<SimTime, *const dyn Behaviour>,
-    deltas: HashMap<*const dyn Belief, f64>,
+    actions: HashMap<SimTime, BehaviourPtr>,
+    deltas: HashMap<BeliefPtr, f64>,
 }
 
 impl BasicAgent {
@@ -348,9 +333,9 @@ impl Agent for BasicAgent {
     /// a.set_activation(3, &b, Some(0.1));
     /// assert_eq!(a.get_activation(3, &b).unwrap(), 0.1);
     /// ```
-    fn get_activation(&self, time: SimTime, belief: &dyn Belief) -> Option<f64> {
+    fn get_activation(&self, time: SimTime, belief: &BeliefPtr) -> Option<f64> {
         match self.activations.get(&time) {
-            Some(x) => x.get(&(belief as *const dyn Belief)).cloned(),
+            Some(x) => x.get(belief).cloned(),
             None => None,
         }
     }
@@ -378,7 +363,7 @@ impl Agent for BasicAgent {
     /// assert_eq!(activations.get(&3).unwrap().len(), 1);
     /// assert_eq!(*activations.get(&3).unwrap().get(&(&b as *const dyn Belief)).unwrap(), 0.1);
     /// ```
-    fn get_activations(&self) -> &HashMap<SimTime, HashMap<*const dyn Belief, f64>> {
+    fn get_activations(&self) -> &HashMap<SimTime, HashMap<BeliefPtr, f64>> {
         &self.activations
     }
 
@@ -427,7 +412,7 @@ impl Agent for BasicAgent {
     fn set_activation(
         &mut self,
         time: SimTime,
-        belief: *const dyn Belief,
+        belief: BeliefPtr,
         activation: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match activation {
@@ -583,8 +568,8 @@ impl Agent for BasicAgent {
     /// a1.set_action(2, Some(&b));
     /// assert_eq!(a1.get_action(2).unwrap(), &b);
     /// ```
-    fn get_action(&self, time: SimTime) -> Option<*const dyn Behaviour> {
-        self.actions.get(&time).cloned()
+    fn get_action(&self, time: SimTime) -> Option<&BehaviourPtr> {
+        self.actions.get(&time)
     }
 
     /// Gets all of the [Behaviour]s that the [Agent] has performed.
@@ -604,7 +589,7 @@ impl Agent for BasicAgent {
     /// assert_eq!(actions.len(), 1);
     /// assert_eq!(*actions.get(&2).unwrap(), &b);
     /// ```
-    fn get_actions(&self) -> &HashMap<SimTime, *const dyn Behaviour> {
+    fn get_actions(&self) -> &HashMap<SimTime, BehaviourPtr> {
         &self.actions
     }
 
@@ -626,7 +611,7 @@ impl Agent for BasicAgent {
     /// a1.set_action(2, Some(&b));
     /// assert_eq!(a1.get_action(2).unwrap(), &b as *const dyn Behaviour);
     /// ```
-    fn set_action(&mut self, time: SimTime, behaviour: Option<*const dyn Behaviour>) {
+    fn set_action(&mut self, time: SimTime, behaviour: Option<BehaviourPtr>) {
         match behaviour {
             Some(x) => self.actions.insert(time, x),
             None => self.actions.remove(&time),
@@ -656,8 +641,8 @@ impl Agent for BasicAgent {
     /// a.set_delta(&b, Some(0.1)).unwrap();
     /// assert_eq!(a.get_delta(&b).unwrap(), 0.1);
     /// ```
-    fn get_delta(&self, belief: &dyn Belief) -> Option<f64> {
-        self.deltas.get(&(belief as *const dyn Belief)).cloned()
+    fn get_delta(&self, belief: &BeliefPtr) -> Option<f64> {
+        self.deltas.get(belief).cloned()
     }
 
     /// Gets all the deltas for the [Agent].
@@ -683,7 +668,7 @@ impl Agent for BasicAgent {
     /// assert_eq!(*deltas.get(&(&b as *const dyn Belief)).unwrap(), 0.1);
     ///
     /// ```
-    fn get_deltas(&self) -> &HashMap<*const dyn Belief, f64> {
+    fn get_deltas(&self) -> &HashMap<BeliefPtr, f64> {
         &self.deltas
     }
 
@@ -714,11 +699,7 @@ impl Agent for BasicAgent {
     /// a.set_delta(&b, Some(0.1)).unwrap();
     /// assert_eq!(a.get_delta(&b).unwrap(), 0.1);
     /// ```
-    fn set_delta(
-        &mut self,
-        belief: *const dyn Belief,
-        delta: Option<f64>,
-    ) -> Result<(), OutOfRangeError> {
+    fn set_delta(&mut self, belief: BeliefPtr, delta: Option<f64>) -> Result<(), OutOfRangeError> {
         match delta {
             None => {
                 self.deltas.remove(&belief);
@@ -770,14 +751,9 @@ impl Agent for BasicAgent {
     ///
     /// assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.25);
     /// ```
-    fn weighted_relationship(
-        &self,
-        t: SimTime,
-        b1: &dyn Belief,
-        b2: *const dyn Belief,
-    ) -> Option<f64> {
+    fn weighted_relationship(&self, t: SimTime, b1: &BeliefPtr, b2: &BeliefPtr) -> Option<f64> {
         match self.get_activation(t, b1) {
-            Some(x) => match (&*b1).get_relationship(b2) {
+            Some(x) => match b1.borrow().get_relationship(b2) {
                 Some(y) => Some(x * y),
                 None => None,
             },
@@ -830,25 +806,16 @@ impl Agent for BasicAgent {
     ///     -0.125
     /// );
     /// ```
-    fn contextualise(
-        &self,
-        t: SimTime,
-        b: &dyn Belief,
-        beliefs: *const [*const dyn Belief],
-    ) -> f64 {
-        unsafe {
-            match beliefs.as_ref() {
-                None => 0.0,
-                Some(bs) => match bs.len() {
-                    0 => 0.0,
-                    size => {
-                        bs.iter()
-                            .map(|&b2| self.weighted_relationship(t, b, b2))
-                            .flatten()
-                            .fold(0.0, |acc, v| acc + v)
-                            / (size as f64)
-                    }
-                },
+    fn contextualise(&self, t: SimTime, b: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64 {
+        match beliefs.len() {
+            0 => 0.0,
+            size => {
+                beliefs
+                    .iter()
+                    .map(|b2| self.weighted_relationship(t, b, b2))
+                    .flatten()
+                    .fold(0.0, |acc, v| acc + v)
+                    / (size as f64)
             }
         }
     }
@@ -892,7 +859,7 @@ impl Agent for BasicAgent {
     ///
     /// assert_eq!(agent.pressure(2, &belief), 0.2);
     /// ```
-    fn pressure(&self, time: SimTime, belief: &dyn Belief) -> f64 {
+    fn pressure(&self, time: SimTime, belief: &BeliefPtr) -> f64 {
         match self.friends.len() {
             0 => 0.0,
             n => {
@@ -903,7 +870,10 @@ impl Agent for BasicAgent {
                             Some(a_ref) => a_ref
                                 .get_action(time)
                                 .map(|behaviour| {
-                                    belief.get_perception(behaviour).unwrap_or_else(|| 0.0)
+                                    belief
+                                        .borrow()
+                                        .get_perception(behaviour)
+                                        .unwrap_or_else(|| 0.0)
                                 })
                                 .map(|v| w * v),
                             None => None,
@@ -971,12 +941,7 @@ impl Agent for BasicAgent {
     ///     0.0875,
     ///     ulps = 2
     /// ))
-    fn activation_change(
-        &self,
-        time: SimTime,
-        belief: &dyn Belief,
-        beliefs: *const [*const dyn Belief],
-    ) -> f64 {
+    fn activation_change(&self, time: SimTime, belief: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64 {
         match self.pressure(time, belief) {
             p if p > 0.0 => (1.0 + self.contextualise(time, belief, beliefs)) / 2.0 * p,
             p => (1.0 - self.contextualise(time, belief, beliefs)) / 2.0 * p,
@@ -1051,21 +1016,26 @@ impl Agent for BasicAgent {
     ///     ulps = 4
     /// ))
     /// ```
-    unsafe fn update_activation(
+    fn update_activation(
         &mut self,
         time: SimTime,
-        belief: *const dyn Belief,
-        beliefs: *const [*const dyn Belief],
+        belief: &BeliefPtr,
+        beliefs: &[BeliefPtr],
     ) -> Result<(), UpdateActivationError> {
         match self.get_delta(&*belief) {
-            None => Err(UpdateActivationError::GetDeltaNone { belief }),
+            None => Err(UpdateActivationError::GetDeltaNone {
+                belief: belief.as_ptr(),
+            }),
             Some(d) => {
                 match self.get_activation(time - 1, &*belief) {
-                    None => Err(UpdateActivationError::GetActivationNone { time, belief }),
+                    None => Err(UpdateActivationError::GetActivationNone {
+                        time,
+                        belief: belief.as_ptr(),
+                    }),
                     Some(a) => {
                         self.set_activation(
                             time,
-                            belief,
+                            belief.clone(),
                             Some((-1.0_f64).max(
                                 (1.0_f64).min(
                                     d * a + self.activation_change(time - 1, &*belief, beliefs),

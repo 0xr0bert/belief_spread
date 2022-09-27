@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{errors::OutOfRangeError, Behaviour, Named, UUIDd};
+use crate::{errors::OutOfRangeError, BehaviourPtr, Named, UUIDd};
 use anyhow::Result;
 use by_address::ByAddress;
 use uuid::Uuid;
@@ -28,7 +28,7 @@ pub trait Belief: Named + UUIDd {
     ///
     /// # Returns
     /// The value, if found.
-    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64>;
+    fn get_perception(&self, behaviour: &BehaviourPtr) -> Option<f64>;
 
     /// Sets the perception.
     ///
@@ -48,7 +48,7 @@ pub trait Belief: Named + UUIDd {
     /// [OutOfRangeError], if the perception is not in range [-1, +1].
     fn set_perception(
         &mut self,
-        behaviour: *const dyn Behaviour,
+        behaviour: BehaviourPtr,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -96,7 +96,7 @@ pub trait Belief: Named + UUIDd {
 pub struct BasicBelief {
     name: String,
     uuid: Uuid,
-    perception: HashMap<*const dyn Behaviour, f64>,
+    perception: HashMap<BehaviourPtr, f64>,
     relationship: HashMap<BeliefPtr, f64>,
 }
 
@@ -173,15 +173,18 @@ impl Belief for BasicBelief {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, BehaviourPtr};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let behaviour = BasicBehaviour::new("Behaviour 1".to_string());
-    /// b.set_perception(&behaviour, Some(0.1));
-    /// assert_eq!(b.get_perception(&behaviour).unwrap(), 0.1);
+    /// let beh_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(behaviour)));
+    /// b.set_perception(beh_ptr.clone(), Some(0.1));
+    /// assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     /// ```
-    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64> {
-        self.perception.get(&behaviour).cloned()
+    fn get_perception(&self, behaviour: &BehaviourPtr) -> Option<f64> {
+        self.perception.get(behaviour).cloned()
     }
 
     /// Sets the perception.
@@ -203,16 +206,19 @@ impl Belief for BasicBelief {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, BehaviourPtr};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let behaviour = BasicBehaviour::new("Behaviour 1".to_string());
-    /// b.set_perception(&behaviour, Some(0.1));
-    /// assert_eq!(b.get_perception(&behaviour).unwrap(), 0.1);
+    /// let beh_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(behaviour)));
+    /// b.set_perception(beh_ptr.clone(), Some(0.1));
+    /// assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     /// ```
     fn set_perception(
         &mut self,
-        behaviour: *const dyn Behaviour,
+        behaviour: BehaviourPtr,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match perception {
@@ -491,32 +497,36 @@ mod tests {
     fn set_when_valid_and_get_perception_when_exists() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        assert!(!b.set_perception(&beh, Some(0.1)).is_err());
-        assert_eq!(b.get_perception(&beh).unwrap(), 0.1);
+        let beh_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(beh)));
+        assert!(!b.set_perception(beh_ptr.clone(), Some(0.1)).is_err());
+        assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     }
 
     #[test]
     fn get_perception_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        assert_eq!(b.get_perception(&beh), None);
+        let beh_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(beh)));
+        assert_eq!(b.get_perception(&beh_ptr), None);
     }
 
     #[test]
     fn set_when_valid_delete_and_get_perception_when_not_exists() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        assert!(!b.set_perception(&beh, Some(0.1)).is_err());
-        assert_eq!(b.get_perception(&beh).unwrap(), 0.1);
-        assert!(!b.set_perception(&beh, None).is_err());
-        assert_eq!(b.get_perception(&beh), None);
+        let beh_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(beh)));
+        assert!(!b.set_perception(beh_ptr.clone(), Some(0.1)).is_err());
+        assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
+        assert!(!b.set_perception(beh_ptr.clone(), None).is_err());
+        assert_eq!(b.get_perception(&beh_ptr), None);
     }
 
     #[test]
     fn set_perception_when_too_low() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let res = b.set_perception(&beh, Some(-1.1));
+        let beh_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(beh)));
+        let res = b.set_perception(beh_ptr.clone(), Some(-1.1));
         let expected_error = OutOfRangeError::TooLow {
             found: -1.1,
             min: -1.0,
@@ -529,7 +539,8 @@ mod tests {
     fn set_perception_when_too_high() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let res = b.set_perception(&beh, Some(1.1));
+        let beh_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(beh)));
+        let res = b.set_perception(beh_ptr.clone(), Some(1.1));
         let expected_error = OutOfRangeError::TooHigh {
             found: 1.1,
             min: -1.0,

@@ -1,10 +1,15 @@
+use by_address::ByAddress;
 use core::fmt::Debug;
+use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
 use crate::{Named, UUIDd};
 
 /// A Behaviour.
 pub trait Behaviour: UUIDd + Named + Debug {}
+
+/// A [Rc] [RefCell] pointer to [Behaviour] compared by address.
+pub type BehaviourPtr = ByAddress<Rc<RefCell<dyn Behaviour>>>;
 
 /// A BasicBehaviour is an implementation of a [Behaviour].
 #[derive(Debug)]

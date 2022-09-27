@@ -6,7 +6,7 @@ mod named;
 mod uuidd;
 
 pub use crate::behaviour::{BasicBehaviour, Behaviour};
-pub use crate::belief::{BasicBelief, Belief};
+pub use crate::belief::{BasicBelief, Belief, BeliefPtr};
 pub use crate::named::Named;
 pub use crate::uuidd::UUIDd;
 

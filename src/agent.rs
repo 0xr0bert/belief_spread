@@ -997,6 +997,60 @@ impl Agent for BasicAgent {
     /// # Return
     /// A [Result] with nothing if [Ok], or an [Err] containing
     /// [UpdateActivationError] if activation is [None] or delta is [None].
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, BasicBelief, Belief};
+    /// use float_cmp::approx_eq;
+    /// let mut agent = BasicAgent::new();
+    /// let mut f1 = BasicAgent::new();
+    /// let mut f2 = BasicAgent::new();
+    /// let b1 = BasicBehaviour::new("b1".to_string());
+    /// let b2 = BasicBehaviour::new("b2".to_string());
+    ///
+    /// f1.set_action(2, Some(&b1));
+    /// f2.set_action(2, Some(&b2));
+    ///
+    /// let mut belief = BasicBelief::new("b1".to_string());
+    /// belief.set_perception(&b1, Some(0.2)).unwrap();
+    /// belief.set_perception(&b2, Some(0.3)).unwrap();
+    ///
+    /// agent.set_friend_weight(&f1, Some(0.5)).unwrap();
+    /// agent.set_friend_weight(&f2, Some(1.0)).unwrap();
+    ///
+    /// // Pressure is 0.2
+    ///
+    /// let belief2 = BasicBelief::new("b2".to_string());
+    /// let mut beliefs = Vec::<*const dyn Belief>::new();
+    /// beliefs.push(&belief);
+    /// beliefs.push(&belief2);
+    /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
+    ///
+    /// agent.set_activation(2, &belief, Some(0.5)).unwrap();
+    /// agent.set_activation(2, &belief2, Some(1.0)).unwrap();
+    /// belief.set_relationship(&belief, Some(1.0)).unwrap();
+    /// belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+    /// // Contextualise is -0.0625
+    ///
+    /// // activation_change is 0.10625
+    /// agent.set_delta(&belief, Some(1.1)).unwrap();
+    ///
+    /// unsafe {
+    ///     agent.update_activation(3, &belief, beliefs_slice).unwrap();
+    /// }
+    ///
+    /// assert!(approx_eq!(
+    ///     f64,
+    ///     *agent
+    ///         .get_activations()
+    ///         .get(&3)
+    ///         .unwrap()
+    ///         .get(&(&belief as *const dyn Belief))
+    ///         .unwrap(),
+    ///     0.65625,
+    ///     ulps = 4
+    /// ))
+    /// ```
     unsafe fn update_activation(
         &mut self,
         time: SimTime,

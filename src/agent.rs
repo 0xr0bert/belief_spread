@@ -793,8 +793,7 @@ impl Agent for BasicAgent {
     /// # Arguments
     /// - `time`: The simulation time ([SimTime]).
     /// - `b`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence. If this is null, function
-    /// returns 0
+    /// - `beliefs`: All the [Belief]s in existence.
     ///
     /// # Returns
     /// The context.
@@ -857,9 +856,6 @@ impl Agent for BasicAgent {
     /// # Returns
     /// The pressure
     ///
-    /// # Safety
-    /// Null friends are ignored.
-    ///
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
@@ -920,8 +916,7 @@ impl Agent for BasicAgent {
     /// # Arguments
     /// - `time`: The time as [SimTime].
     /// - `belief`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence. If this is null,
-    /// the function returns 0.
+    /// - `beliefs`: All the [Belief]s in existence.
     ///
     /// # Return
     /// - The change in activation

@@ -1,7 +1,8 @@
 //! This module contains various errors that may be produced.
 use thiserror::Error;
+use uuid::Uuid;
 
-use crate::{Belief, SimTime};
+use crate::SimTime;
 
 /// An error for when a supplied value is out of range.
 #[derive(Error, Debug, PartialEq)]
@@ -19,12 +20,9 @@ pub enum OutOfRangeError {
 pub enum UpdateActivationError {
     /// When the activation for a [Belief] at a [SimTime] is [None].
     #[error("Get activation is none")]
-    GetActivationNone {
-        time: SimTime,
-        belief: *const dyn Belief,
-    },
+    GetActivationNone { time: SimTime, belief: Uuid },
 
     /// When the delta for a [Belief] is [None].
     #[error("Get delta is none")]
-    GetDeltaNone { belief: *const dyn Belief },
+    GetDeltaNone { belief: Uuid },
 }

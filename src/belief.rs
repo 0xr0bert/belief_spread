@@ -101,6 +101,7 @@ pub struct BasicBelief {
 }
 
 impl Debug for BasicBelief {
+    #[cfg(not(tarpaulin_include))]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BasicBelief")
             .field("name", &self.name)

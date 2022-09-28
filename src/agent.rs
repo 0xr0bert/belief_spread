@@ -1,12 +1,16 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use anyhow::Result;
+use by_address::ByAddress;
 use uuid::Uuid;
 
 use crate::{
     errors::{OutOfRangeError, UpdateActivationError},
     BehaviourPtr, BeliefPtr, SimTime, UUIDd,
 };
+
+/// A [Rc] [RefCell] pointer to an [Agent] compared by its address.
+pub type AgentPtr = ByAddress<Rc<RefCell<dyn Agent>>>;
 
 /// An [Agent] which may exist in the model.
 pub trait Agent: UUIDd {
@@ -63,7 +67,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The friends with their weight of connection.
-    fn get_friends(&self) -> &HashMap<*const dyn Agent, f64>;
+    fn get_friends(&self) -> &HashMap<AgentPtr, f64>;
 
     /// Gets the weight of a friend of the [Agent].
     ///
@@ -76,7 +80,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The weight, or [None] if they are not friends.
-    fn get_friend_weight(&self, friend: *const dyn Agent) -> Option<f64>;
+    fn get_friend_weight(&self, friend: &AgentPtr) -> Option<f64>;
 
     /// Set the weight of a friend of the [Agent].
     ///
@@ -98,7 +102,7 @@ pub trait Agent: UUIDd {
     /// [OutOfRangeError], if the weight is not in the range [0, +1].
     fn set_friend_weight(
         &mut self,
-        friend: *const dyn Agent,
+        friend: AgentPtr,
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -237,30 +241,13 @@ pub trait Agent: UUIDd {
     /// # Return
     /// - The change in activation
     fn activation_change(&self, time: SimTime, belief: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64;
-
-    /// Updates the activation for a given `time` and [Belief].
-    ///
-    /// # Arguments
-    /// - `time`: The time as [SimTime].
-    /// - `belief`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence.
-    ///
-    /// # Return
-    /// A [Result] with nothing if [Ok], or an [Err] containing
-    /// [UpdateActivationError] if activation is [None] or delta is [None].
-    fn update_activation(
-        &mut self,
-        time: SimTime,
-        belief: &BeliefPtr,
-        beliefs: &[BeliefPtr],
-    ) -> Result<(), UpdateActivationError>;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
 pub struct BasicAgent {
     uuid: Uuid,
     activations: HashMap<SimTime, HashMap<BeliefPtr, f64>>,
-    friends: HashMap<*const dyn Agent, f64>,
+    friends: HashMap<AgentPtr, f64>,
     actions: HashMap<SimTime, BehaviourPtr>,
     deltas: HashMap<BeliefPtr, f64>,
 }
@@ -476,7 +463,7 @@ impl Agent for BasicAgent {
     /// assert_eq!(friends.len(), 1);
     /// assert_eq!(*friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.1);
     /// ```
-    fn get_friends(&self) -> &HashMap<*const dyn Agent, f64> {
+    fn get_friends(&self) -> &HashMap<AgentPtr, f64> {
         &self.friends
     }
 
@@ -501,8 +488,8 @@ impl Agent for BasicAgent {
     /// a1.set_friend_weight(&a2, Some(0.1)).unwrap();
     /// assert_eq!(a1.get_friend_weight(&a2).unwrap(), 0.1)
     /// ```
-    fn get_friend_weight(&self, friend: *const dyn Agent) -> Option<f64> {
-        self.friends.get(&friend).cloned()
+    fn get_friend_weight(&self, friend: &AgentPtr) -> Option<f64> {
+        self.friends.get(friend).cloned()
     }
 
     /// Set the weight of a friend of the [Agent].
@@ -535,7 +522,7 @@ impl Agent for BasicAgent {
     /// ```
     fn set_friend_weight(
         &mut self,
-        friend: *const dyn Agent,
+        friend: AgentPtr,
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match weight {
@@ -907,19 +894,16 @@ impl Agent for BasicAgent {
             n => {
                 self.friends
                     .iter()
-                    .map(|(&a, w)| unsafe {
-                        match a.as_ref() {
-                            Some(a_ref) => a_ref
-                                .get_action(time)
-                                .map(|behaviour| {
-                                    belief
-                                        .borrow()
-                                        .get_perception(behaviour)
-                                        .unwrap_or_else(|| 0.0)
-                                })
-                                .map(|v| w * v),
-                            None => None,
-                        }
+                    .map(|(a, w)| {
+                        a.borrow()
+                            .get_action(time)
+                            .map(|behaviour| {
+                                belief
+                                    .borrow()
+                                    .get_perception(behaviour)
+                                    .unwrap_or_else(|| 0.0)
+                            })
+                            .map(|v| v * w)
                     })
                     .flatten()
                     .sum::<f64>()
@@ -994,108 +978,45 @@ impl Agent for BasicAgent {
             p => (1.0 - self.contextualise(time, belief, beliefs)) / 2.0 * p,
         }
     }
+}
 
-    /// Updates the activation for a given `time` and [Belief].
-    ///
-    /// # Arguments
-    /// - `time`: The time as [SimTime].
-    /// - `belief`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence.
-    ///
-    /// # Safety
-    /// `belief` *must* exist or this function will cause undefined behaviour /
-    /// fail spectacularly.
-    ///
-    /// # Return
-    /// A [Result] with nothing if [Ok], or an [Err] containing
-    /// [UpdateActivationError] if activation is [None] or delta is [None].
-    ///
-    /// # Examples
-    /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
-    /// use float_cmp::approx_eq;
-    ///
-    /// let mut agent = BasicAgent::new();
-    /// let mut f1 = BasicAgent::new();
-    /// let mut f2 = BasicAgent::new();
-    /// let b1 = BasicBehaviour::new("b1".to_string());
-    /// let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
-    /// let b2 = BasicBehaviour::new("b2".to_string());
-    /// let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
-    ///
-    /// f1.set_action(2, Some(b1_ptr.clone()));
-    /// f2.set_action(2, Some(b2_ptr.clone()));
-    ///
-    /// let belief = BasicBelief::new("b1".to_string());
-    /// let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-    /// (**belief_ptr).borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
-    /// (**belief_ptr).borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
-    ///
-    /// agent.set_friend_weight(&f1, Some(0.5)).unwrap();
-    /// agent.set_friend_weight(&f2, Some(1.0)).unwrap();
-    ///
-    /// // Pressure is 0.2
-    ///
-    /// let belief2 = BasicBelief::new("b2".to_string());
-    /// let belief2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief2)));
-    /// let mut beliefs = Vec::<BeliefPtr>::new();
-    /// beliefs.push(belief_ptr.clone());
-    /// beliefs.push(belief2_ptr.clone());
-    ///
-    /// agent.set_activation(2, belief_ptr.clone(), Some(0.5)).unwrap();
-    /// agent.set_activation(2, belief2_ptr.clone(), Some(1.0)).unwrap();
-    /// (**belief_ptr).borrow_mut().set_relationship(belief_ptr.clone(), Some(1.0)).unwrap();
-    /// (**belief_ptr).borrow_mut().set_relationship(belief2_ptr.clone(), Some(-0.75)).unwrap();
-    /// // Contextualise is -0.0625
-    ///
-    /// // activation_change is 0.10625
-    /// agent.set_delta(belief_ptr.clone(), Some(1.1)).unwrap();
-    ///
-    /// agent.update_activation(3, &belief_ptr, &beliefs).unwrap();
-    ///
-    /// assert!(approx_eq!(
-    ///     f64,
-    ///     *agent
-    ///         .get_activations()
-    ///         .get(&3)
-    ///         .unwrap()
-    ///         .get(&belief_ptr)
-    ///         .unwrap(),
-    ///     0.65625,
-    ///     ulps = 4
-    /// ))
-    /// ```
-    fn update_activation(
-        &mut self,
-        time: SimTime,
-        belief: &BeliefPtr,
-        beliefs: &[BeliefPtr],
-    ) -> Result<(), UpdateActivationError> {
-        match self.get_delta(&*belief) {
-            None => Err(UpdateActivationError::GetDeltaNone {
-                belief: belief.borrow().uuid().clone(),
-            }),
-            Some(d) => {
-                match self.get_activation(time - 1, &*belief) {
-                    None => Err(UpdateActivationError::GetActivationNone {
-                        time,
-                        belief: belief.borrow().uuid().clone(),
-                    }),
-                    Some(a) => {
-                        self.set_activation(
-                            time,
-                            belief.clone(),
-                            Some((-1.0_f64).max(
-                                (1.0_f64).min(
-                                    d * a + self.activation_change(time - 1, &*belief, beliefs),
-                                ),
-                            )),
-                        )
+/// Updates the activation for a given [Agent] `time` and [Belief].
+///
+/// # Arguments
+/// - `time`: The time as [SimTime].
+/// - `belief`: The [Belief].
+/// - `beliefs`: All the [Belief]s in existence.
+///
+/// # Return
+/// A [Result] with nothing if [Ok], or an [Err] containing
+/// [UpdateActivationError] if activation is [None] or delta is [None].
+pub fn update_activation_for_agent(
+    agent: &AgentPtr,
+    time: SimTime,
+    belief: &BeliefPtr,
+    beliefs: &[BeliefPtr],
+) -> Result<(), UpdateActivationError> {
+    let delta = agent.borrow().get_delta(belief);
+    match delta {
+        None => Err(UpdateActivationError::GetDeltaNone {
+            belief: belief.borrow().uuid().clone(),
+        }),
+        Some(d) => {
+            let activation = agent.borrow().get_activation(time - 1, belief);
+            match activation {
+                None => Err(UpdateActivationError::GetActivationNone {
+                    time: time - 1,
+                    belief: belief.borrow().uuid().clone(),
+                }),
+                Some(a) => {
+                    let activation_change =
+                        { agent.borrow().activation_change(time - 1, belief, beliefs) };
+                    let new_activation = (-1.0_f64).max((1.0_f64).min(d * a + activation_change));
+                    agent
+                        .borrow_mut()
+                        .set_activation(time, belief.clone(), Some(new_activation))
                         .unwrap();
-                        Ok(())
-                    }
+                    Ok(())
                 }
             }
         }
@@ -1116,7 +1037,7 @@ impl UUIDd for BasicAgent {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, ptr::null, rc::Rc};
+    use std::{cell::RefCell, rc::Rc};
 
     use by_address::ByAddress;
 
@@ -1350,7 +1271,7 @@ mod tests {
     #[test]
     fn get_friends_when_empty() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let friends: HashMap<AgentPtr, f64> = HashMap::new();
         a.friends = friends;
         assert!(a.get_friends().is_empty())
     }
@@ -1359,90 +1280,95 @@ mod tests {
     fn get_friends_when_not_empty() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
-        friends.insert(&a2, 0.3);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        friends.insert(a2_ptr.clone(), 0.3);
         a.friends = friends;
         assert_eq!(a.get_friends().len(), 1);
-        assert_eq!(
-            *a.get_friends().get(&(&a2 as *const dyn Agent)).unwrap(),
-            0.3
-        );
+        assert_eq!(*a.get_friends().get(&a2_ptr).unwrap(), 0.3);
     }
 
     #[test]
     fn get_friend_weight_when_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
-        friends.insert(&a2, 0.3);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        friends.insert(a2_ptr.clone(), 0.3);
         a.friends = friends;
-        assert_eq!(a.get_friend_weight(&a2).unwrap(), 0.3);
+        assert_eq!(a.get_friend_weight(&a2_ptr).unwrap(), 0.3);
     }
 
     #[test]
     fn get_friend_weight_when_not_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let friends: HashMap<AgentPtr, f64> = HashMap::new();
         a.friends = friends;
-        assert_eq!(a.get_friend_weight(&a2), None);
+        assert_eq!(a.get_friend_weight(&a2_ptr), None);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_valid() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let friends: HashMap<AgentPtr, f64> = HashMap::new();
         a.friends = friends;
 
         let a2 = BasicAgent::new();
-        a.set_friend_weight(&a2, Some(0.5)).unwrap();
-        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.5);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        a.set_friend_weight(a2_ptr.clone(), Some(0.5)).unwrap();
+        assert_eq!(*a.friends.get(&a2_ptr).unwrap(), 0.5);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_valid() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(&a2, 0.2);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
-        a.set_friend_weight(&a2, Some(0.5)).unwrap();
-        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.5);
+        a.set_friend_weight(a2_ptr.clone(), Some(0.5)).unwrap();
+        assert_eq!(*a.friends.get(&a2_ptr).unwrap(), 0.5);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_valid_delete() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(&a2, 0.2);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
-        a.set_friend_weight(&a2, None).unwrap();
-        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
+        a.set_friend_weight(a2_ptr.clone(), None).unwrap();
+        assert_eq!(a.friends.get(&a2_ptr), None);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_valid_delete() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let friends: HashMap<AgentPtr, f64> = HashMap::new();
         a.friends = friends;
 
         let a2 = BasicAgent::new();
-        a.set_friend_weight(&a2, None).unwrap();
-        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        a.set_friend_weight(a2_ptr.clone(), None).unwrap();
+        assert_eq!(a.friends.get(&a2_ptr), None);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_too_low() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(&a2, 0.2);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
-        let result = a.set_friend_weight(&a2, Some(-0.1));
+        let result = a.set_friend_weight(a2_ptr.clone(), Some(-0.1));
 
         let expected_error = OutOfRangeError::TooLow {
             found: -0.1,
@@ -1452,17 +1378,18 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), expected_error);
 
-        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.2);
+        assert_eq!(*a.friends.get(&a2_ptr).unwrap(), 0.2);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_too_low() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
         a.friends = friends;
 
-        let result = a.set_friend_weight(&a2, Some(-0.1));
+        let result = a.set_friend_weight(a2_ptr.clone(), Some(-0.1));
 
         let expected_error = OutOfRangeError::TooLow {
             found: -0.1,
@@ -1472,18 +1399,19 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), expected_error);
 
-        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
+        assert_eq!(a.friends.get(&a2_ptr), None);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_too_high() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        friends.insert(&a2, 0.2);
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
-        let result = a.set_friend_weight(&a2, Some(1.1));
+        let result = a.set_friend_weight(a2_ptr.clone(), Some(1.1));
 
         let expected_error = OutOfRangeError::TooHigh {
             found: 1.1,
@@ -1493,17 +1421,18 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), expected_error);
 
-        assert_eq!(*a.friends.get(&(&a2 as *const dyn Agent)).unwrap(), 0.2);
+        assert_eq!(*a.friends.get(&a2_ptr).unwrap(), 0.2);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_too_high() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
+        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
         a.friends = friends;
 
-        let result = a.set_friend_weight(&a2, Some(1.1));
+        let result = a.set_friend_weight(a2_ptr.clone(), Some(1.1));
 
         let expected_error = OutOfRangeError::TooHigh {
             found: 1.1,
@@ -1513,7 +1442,7 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), expected_error);
 
-        assert_eq!(a.friends.get(&(&a2 as *const dyn Agent)), None);
+        assert_eq!(a.friends.get(&a2_ptr), None);
     }
 
     #[test]
@@ -1909,66 +1838,90 @@ mod tests {
         let mut agent = BasicAgent::new();
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let friends: HashMap<AgentPtr, f64> = HashMap::new();
         agent.friends = friends;
         assert_eq!(agent.pressure(2, &belief_ptr), 0.0);
     }
 
     #[test]
     fn pressure_when_friends_did_nothing() {
-        let mut agent = BasicAgent::new();
+        let agent = BasicAgent::new();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
         let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
         let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
 
-        friends.insert(&agent, 0.2);
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
+        {
+            let mut mut_agent = agent_ptr.borrow_mut();
+            mut_agent
+                .set_friend_weight(agent_ptr.clone(), Some(0.2))
+                .unwrap();
+            mut_agent
+                .set_friend_weight(f1_ptr.clone(), Some(0.5))
+                .unwrap();
+            mut_agent
+                .set_friend_weight(f2_ptr.clone(), Some(1.0))
+                .unwrap();
+        }
 
-        agent.friends = friends;
-        assert_eq!(agent.pressure(2, &belief_ptr), 0.0);
+        assert_eq!(agent_ptr.borrow().pressure(2, &belief_ptr), 0.0);
     }
 
     #[test]
     fn pressure_when_friends_did_something_but_perception_null() {
-        let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
+        let agent = BasicAgent::new();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
 
-        friends.insert(&agent, 0.2);
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
+        {
+            let mut mut_agent = agent_ptr.borrow_mut();
+            mut_agent
+                .set_friend_weight(agent_ptr.clone(), Some(0.2))
+                .unwrap();
+            mut_agent
+                .set_friend_weight(f1_ptr.clone(), Some(0.5))
+                .unwrap();
+            mut_agent
+                .set_friend_weight(f2_ptr.clone(), Some(1.0))
+                .unwrap();
+        }
 
-        agent.friends = friends;
-        assert_eq!(agent.pressure(2, &belief_ptr), 0.0);
+        assert_eq!(agent_ptr.borrow().pressure(2, &belief_ptr), 0.0);
     }
 
     #[test]
     fn pressure_when_friends_did_something() {
-        let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
+        let agent = BasicAgent::new();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
@@ -1981,64 +1934,35 @@ mod tests {
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
 
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        {
+            let mut mut_agent = agent_ptr.borrow_mut();
+            mut_agent
+                .set_friend_weight(f1_ptr.clone(), Some(0.5))
+                .unwrap();
+            mut_agent
+                .set_friend_weight(f2_ptr.clone(), Some(1.0))
+                .unwrap();
+        }
 
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
-
-        agent.friends = friends;
-        assert_eq!(agent.pressure(2, &belief_ptr), 0.2);
-    }
-
-    #[test]
-    fn pressure_when_friends_did_something_but_some_null() {
-        let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
-        let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
-        let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
-
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
-
-        let belief = BasicBelief::new("b1".to_string());
-        let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        (**belief_ptr)
-            .borrow_mut()
-            .set_perception(b1_ptr.clone(), Some(0.2))
-            .unwrap();
-        (**belief_ptr)
-            .borrow_mut()
-            .set_perception(b2_ptr.clone(), Some(0.3))
-            .unwrap();
-
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
-
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
-
-        let f3_ref: *const BasicAgent = null();
-
-        friends.insert(f3_ref, 0.2);
-
-        agent.friends = friends;
-        assert_eq!(agent.pressure(2, &belief_ptr), 0.4 / 3.0);
+        assert_eq!(agent_ptr.borrow().pressure(2, &belief_ptr), 0.2);
     }
 
     #[test]
     fn activation_change_when_pressure_positive() {
-        let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
+        let agent = BasicAgent::new();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
@@ -2051,12 +1975,15 @@ mod tests {
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
 
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
-
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
-
-        agent.friends = friends;
+        {
+            let mut mut_agent = agent_ptr.borrow_mut();
+            mut_agent
+                .set_friend_weight(f1_ptr.clone(), Some(0.5))
+                .unwrap();
+            mut_agent
+                .set_friend_weight(f2_ptr.clone(), Some(1.0))
+                .unwrap();
+        }
         // Pressure is 0.2
 
         let belief2 = BasicBelief::new("b2".to_string());
@@ -2065,10 +1992,12 @@ mod tests {
         beliefs.push(belief_ptr.clone());
         beliefs.push(belief2_ptr.clone());
 
-        agent
+        agent_ptr
+            .borrow_mut()
             .set_activation(2, belief_ptr.clone(), Some(1.0))
             .unwrap();
-        agent
+        agent_ptr
+            .borrow_mut()
             .set_activation(2, belief2_ptr.clone(), Some(1.0))
             .unwrap();
         (**belief_ptr)
@@ -2083,7 +2012,9 @@ mod tests {
 
         assert!(approx_eq!(
             f64,
-            agent.activation_change(2, &belief_ptr, &beliefs),
+            agent_ptr
+                .borrow()
+                .activation_change(2, &belief_ptr, &beliefs),
             0.0875,
             ulps = 2
         ))
@@ -2091,16 +2022,20 @@ mod tests {
 
     #[test]
     fn activation_change_when_pressure_negative() {
-        let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
+        let agent = BasicAgent::new();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
@@ -2113,12 +2048,15 @@ mod tests {
             .set_perception(b2_ptr.clone(), Some(-0.3))
             .unwrap();
 
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
-
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
-
-        agent.friends = friends;
+        {
+            let mut mut_agent = agent_ptr.borrow_mut();
+            mut_agent
+                .set_friend_weight(f1_ptr.clone(), Some(0.5))
+                .unwrap();
+            mut_agent
+                .set_friend_weight(f2_ptr.clone(), Some(1.0))
+                .unwrap();
+        }
         // Pressure is -0.2
 
         let belief2 = BasicBelief::new("b2".to_string());
@@ -2127,10 +2065,12 @@ mod tests {
         beliefs.push(belief_ptr.clone());
         beliefs.push(belief2_ptr.clone());
 
-        agent
+        agent_ptr
+            .borrow_mut()
             .set_activation(2, belief_ptr.clone(), Some(1.0))
             .unwrap();
-        agent
+        agent_ptr
+            .borrow_mut()
             .set_activation(2, belief2_ptr.clone(), Some(1.0))
             .unwrap();
         (**belief_ptr)
@@ -2145,7 +2085,9 @@ mod tests {
 
         assert!(approx_eq!(
             f64,
-            agent.activation_change(2, &belief_ptr, &beliefs),
+            agent_ptr
+                .borrow()
+                .activation_change(2, &belief_ptr, &beliefs),
             -0.1125,
             ulps = 2
         ))
@@ -2163,22 +2105,22 @@ mod tests {
 
         agent.deltas = deltas;
 
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+
         let expected_error = UpdateActivationError::GetActivationNone {
             time: 2,
             belief: (**belief_ptr).borrow().uuid().clone(),
         };
 
         assert_eq!(
-            agent
-                .update_activation(2, &belief_ptr, &beliefs)
-                .unwrap_err(),
+            update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap_err(),
             expected_error
         );
     }
 
     #[test]
     fn update_activation_when_delta_none() {
-        let mut agent = BasicAgent::new();
+        let agent = BasicAgent::new();
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
         let beliefs: Vec<BeliefPtr> = Vec::new();
@@ -2187,10 +2129,9 @@ mod tests {
             belief: belief_ptr.borrow().uuid().clone(),
         };
 
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
         assert_eq!(
-            agent
-                .update_activation(2, &belief_ptr, &beliefs)
-                .unwrap_err(),
+            update_activation_for_agent(&agent_ptr, 2, &belief_ptr, &beliefs).unwrap_err(),
             expected_error
         );
     }
@@ -2198,15 +2139,17 @@ mod tests {
     #[test]
     fn update_activation_when_new_value_in_range() {
         let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
+        let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
@@ -2219,10 +2162,10 @@ mod tests {
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
 
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
 
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
+        friends.insert(f1_ptr.clone(), 0.5);
+        friends.insert(f2_ptr.clone(), 1.0);
 
         agent.friends = friends;
         // Pressure is 0.2
@@ -2254,11 +2197,19 @@ mod tests {
         delta.insert(belief_ptr.clone(), 1.1);
         agent.deltas = delta;
 
-        agent.update_activation(3, &belief_ptr, &beliefs).unwrap();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+
+        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
 
         assert!(approx_eq!(
             f64,
-            *agent.activations.get(&3).unwrap().get(&belief_ptr).unwrap(),
+            *agent_ptr
+                .borrow()
+                .get_activations()
+                .get(&3)
+                .unwrap()
+                .get(&belief_ptr)
+                .unwrap(),
             0.65625,
             ulps = 4
         ))
@@ -2267,15 +2218,17 @@ mod tests {
     #[test]
     fn update_activation_when_new_value_too_high() {
         let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
+        let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
@@ -2288,10 +2241,10 @@ mod tests {
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
 
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
 
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
+        friends.insert(f1_ptr.clone(), 0.5);
+        friends.insert(f2_ptr.clone(), 1.0);
 
         agent.friends = friends;
         // Pressure is 0.2
@@ -2323,11 +2276,18 @@ mod tests {
         delta.insert(belief_ptr.clone(), 100000.0);
         agent.deltas = delta;
 
-        agent.update_activation(3, &belief_ptr, &beliefs).unwrap();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
 
         assert!(approx_eq!(
             f64,
-            *agent.activations.get(&3).unwrap().get(&belief_ptr).unwrap(),
+            *agent_ptr
+                .borrow()
+                .get_activations()
+                .get(&3)
+                .unwrap()
+                .get(&belief_ptr)
+                .unwrap(),
             1.0,
             ulps = 4
         ))
@@ -2336,15 +2296,17 @@ mod tests {
     #[test]
     fn update_activation_when_new_value_too_low() {
         let mut agent = BasicAgent::new();
-        let mut f1 = BasicAgent::new();
-        let mut f2 = BasicAgent::new();
+        let f1 = BasicAgent::new();
+        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f2 = BasicAgent::new();
+        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        f1.set_action(2, Some(b1_ptr.clone()));
-        f2.set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
@@ -2357,10 +2319,10 @@ mod tests {
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
 
-        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
 
-        friends.insert(&f1, 0.5);
-        friends.insert(&f2, 1.0);
+        friends.insert(f1_ptr.clone(), 0.5);
+        friends.insert(f2_ptr.clone(), 1.0);
 
         agent.friends = friends;
         // Pressure is 0.2
@@ -2397,11 +2359,18 @@ mod tests {
         delta.insert(belief_ptr.clone(), -100000.0);
         agent.deltas = delta;
 
-        agent.update_activation(3, &belief_ptr, &beliefs).unwrap();
+        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
 
         assert!(approx_eq!(
             f64,
-            *agent.activations.get(&3).unwrap().get(&belief_ptr).unwrap(),
+            *agent_ptr
+                .borrow()
+                .get_activations()
+                .get(&3)
+                .unwrap()
+                .get(&belief_ptr)
+                .unwrap(),
             -1.0,
             ulps = 4
         ))

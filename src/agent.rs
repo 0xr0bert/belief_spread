@@ -326,12 +326,15 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief};
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, BeliefPtr};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
     /// let b = BasicBelief::new("b1".to_string());
-    /// a.set_activation(3, &b, Some(0.1));
-    /// assert_eq!(a.get_activation(3, &b).unwrap(), 0.1);
+    /// let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// a.set_activation(3, b_ptr.clone(), Some(0.1));
+    /// assert_eq!(a.get_activation(3, &b_ptr).unwrap(), 0.1);
     /// ```
     fn get_activation(&self, time: SimTime, belief: &BeliefPtr) -> Option<f64> {
         match self.activations.get(&time) {
@@ -353,15 +356,18 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, BeliefPtr, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
     /// let b = BasicBelief::new("b1".to_string());
-    /// a.set_activation(3, &b, Some(0.1));
+    /// let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// a.set_activation(3, b_ptr.clone(), Some(0.1));
     /// let activations = a.get_activations();
     /// assert_eq!(activations.len(), 1);
     /// assert_eq!(activations.get(&3).unwrap().len(), 1);
-    /// assert_eq!(*activations.get(&3).unwrap().get(&(&b as *const dyn Belief)).unwrap(), 0.1);
+    /// assert_eq!(*activations.get(&3).unwrap().get(&b_ptr).unwrap(), 0.1);
     /// ```
     fn get_activations(&self) -> &HashMap<SimTime, HashMap<BeliefPtr, f64>> {
         &self.activations
@@ -387,27 +393,33 @@ impl Agent for BasicAgent {
     /// ## Updating activation
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief};
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, BeliefPtr};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
     /// let b = BasicBelief::new("b1".to_string());
-    /// a.set_activation(3, &b, Some(0.1));
-    /// assert_eq!(a.get_activation(3, &b).unwrap(), 0.1);
-    /// a.set_activation(3, &b, Some(-0.1));
-    /// assert_eq!(a.get_activation(3, &b).unwrap(), -0.1);
+    /// let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// a.set_activation(3, b_ptr.clone(), Some(0.1));
+    /// assert_eq!(a.get_activation(3, &b_ptr).unwrap(), 0.1);
+    /// a.set_activation(3, b_ptr.clone(), Some(-0.1));
+    /// assert_eq!(a.get_activation(3, &b_ptr).unwrap(), -0.1);
     /// ```
     ///
     /// ## Deleting activation
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief};
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, BeliefPtr};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
     /// let b = BasicBelief::new("b1".to_string());
-    /// a.set_activation(3, &b, Some(0.1));
-    /// assert_eq!(a.get_activation(3, &b).unwrap(), 0.1);
-    /// a.set_activation(3, &b, None);
-    /// assert_eq!(a.get_activation(3, &b), None);
+    /// let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// a.set_activation(3, b_ptr.clone(), Some(0.1));
+    /// assert_eq!(a.get_activation(3, &b_ptr).unwrap(), 0.1);
+    /// a.set_activation(3, b_ptr.clone(), None);
+    /// assert_eq!(a.get_activation(3, &b_ptr), None);
     /// ```
     fn set_activation(
         &mut self,
@@ -560,13 +572,16 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
+    /// let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
     ///
-    /// a1.set_action(2, Some(&b));
-    /// assert_eq!(a1.get_action(2).unwrap(), &b);
+    /// a1.set_action(2, Some(b_ptr.clone()));
+    /// assert_eq!(a1.get_action(2).unwrap(), &b_ptr);
     /// ```
     fn get_action(&self, time: SimTime) -> Option<&BehaviourPtr> {
         self.actions.get(&time)
@@ -579,15 +594,18 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
+    /// let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
     ///
-    /// a1.set_action(2, Some(&b));
+    /// a1.set_action(2, Some(b_ptr.clone()));
     /// let actions = a1.get_actions();
     /// assert_eq!(actions.len(), 1);
-    /// assert_eq!(*actions.get(&2).unwrap(), &b);
+    /// assert_eq!(actions.get(&2).unwrap(), &b_ptr);
     /// ```
     fn get_actions(&self) -> &HashMap<SimTime, BehaviourPtr> {
         &self.actions
@@ -603,13 +621,16 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
+    /// let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
     ///
-    /// a1.set_action(2, Some(&b));
-    /// assert_eq!(a1.get_action(2).unwrap(), &b as *const dyn Behaviour);
+    /// a1.set_action(2, Some(b_ptr.clone()));
+    /// assert_eq!(a1.get_action(2).unwrap(), &b_ptr);
     /// ```
     fn set_action(&mut self, time: SimTime, behaviour: Option<BehaviourPtr>) {
         match behaviour {
@@ -634,12 +655,15 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, BeliefPtr, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
     /// let b = BasicBelief::new("b1".to_string());
-    /// a.set_delta(&b, Some(0.1)).unwrap();
-    /// assert_eq!(a.get_delta(&b).unwrap(), 0.1);
+    /// let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// a.set_delta(b_ptr.clone(), Some(0.1)).unwrap();
+    /// assert_eq!(a.get_delta(&b_ptr).unwrap(), 0.1);
     /// ```
     fn get_delta(&self, belief: &BeliefPtr) -> Option<f64> {
         self.deltas.get(belief).cloned()
@@ -658,14 +682,17 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, BeliefPtr, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
     /// let b = BasicBelief::new("b1".to_string());
-    /// a.set_delta(&b, Some(0.1)).unwrap();
+    /// let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// a.set_delta(b_ptr.clone(), Some(0.1)).unwrap();
     /// let deltas = a.get_deltas();
     /// assert_eq!(deltas.len(), 1);
-    /// assert_eq!(*deltas.get(&(&b as *const dyn Belief)).unwrap(), 0.1);
+    /// assert_eq!(*deltas.get(&b_ptr).unwrap(), 0.1);
     ///
     /// ```
     fn get_deltas(&self) -> &HashMap<BeliefPtr, f64> {
@@ -692,12 +719,15 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBelief, Belief, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBelief, BeliefPtr, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
     /// let b = BasicBelief::new("b1".to_string());
-    /// a.set_delta(&b, Some(0.1)).unwrap();
-    /// assert_eq!(a.get_delta(&b).unwrap(), 0.1);
+    /// let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// a.set_delta(b_ptr.clone(), Some(0.1)).unwrap();
+    /// assert_eq!(a.get_delta(&b_ptr).unwrap(), 0.1);
     /// ```
     fn set_delta(&mut self, belief: BeliefPtr, delta: Option<f64>) -> Result<(), OutOfRangeError> {
         match delta {
@@ -741,15 +771,19 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{Agent, BasicAgent, Belief, BasicBelief};
+    /// use belief_spread::{Agent, BasicAgent, BeliefPtr, BasicBelief};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
-    /// let mut b1 = BasicBelief::new("b1".to_string());
+    /// let b1 = BasicBelief::new("b1".to_string());
+    /// let b1_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b1)));
     /// let b2 = BasicBelief::new("b2".to_string());
-    /// b1.set_relationship(&b2, Some(0.5));
-    /// a.set_activation(2, &b1, Some(0.5));
+    /// let b2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b2)));
+    /// (**b1_ptr).borrow_mut().set_relationship(b2_ptr.clone(), Some(0.5));
+    /// a.set_activation(2, b1_ptr.clone(), Some(0.5));
     ///
-    /// assert_eq!(a.weighted_relationship(2, &b1, &b2).unwrap(), 0.25);
+    /// assert_eq!(a.weighted_relationship(2, &b1_ptr, &b2_ptr).unwrap(), 0.25);
     /// ```
     fn weighted_relationship(&self, t: SimTime, b1: &BeliefPtr, b2: &BeliefPtr) -> Option<f64> {
         match self.get_activation(t, b1) {
@@ -780,29 +814,32 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{Agent, BasicAgent, Belief, BasicBelief, UUIDd};
+    /// use belief_spread::{Agent, BasicAgent, BeliefPtr, BasicBelief, UUIDd};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a = BasicAgent::new();
-    /// let mut b1 = BasicBelief::new("b1".to_string());
+    /// let b1 = BasicBelief::new("b1".to_string());
+    /// let b1_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b1)));
     /// let b2 = BasicBelief::new("b2".to_string());
+    /// let b2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b2)));
     ///
-    /// a.set_activation(2, &b1, Some(1.0)).unwrap();
-    /// a.set_activation(2, &b2, Some(1.0)).unwrap();
+    /// a.set_activation(2, b1_ptr.clone(), Some(1.0)).unwrap();
+    /// a.set_activation(2, b2_ptr.clone(), Some(1.0)).unwrap();
     ///
-    /// b1.set_relationship(
-    ///     &b1,
+    /// (**b1_ptr).borrow_mut().set_relationship(
+    ///     b1_ptr.clone(),
     ///     Some(0.5),
     /// )
     /// .unwrap();
-    /// b1.set_relationship(&b2, Some(-0.75)).unwrap();
+    /// (**b1_ptr).borrow_mut().set_relationship(b2_ptr.clone(), Some(-0.75)).unwrap();
     ///
-    /// let mut beliefs: Vec<*const dyn Belief> = Vec::new();
-    /// beliefs.push(&b1);
-    /// beliefs.push(&b2);
+    /// let mut beliefs: Vec<BeliefPtr> = Vec::new();
+    /// beliefs.push(b1_ptr.clone());
+    /// beliefs.push(b2_ptr.clone());
     ///
-    /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
     /// assert_eq!(
-    ///     a.contextualise(2, &b1, beliefs_slice),
+    ///     a.contextualise(2, &b1_ptr, &beliefs),
     ///     -0.125
     /// );
     /// ```
@@ -838,26 +875,31 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, BasicBelief, Belief};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
     /// use std::collections::HashMap;
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut agent = BasicAgent::new();
     /// let mut f1 = BasicAgent::new();
     /// let mut f2 = BasicAgent::new();
     /// let b1 = BasicBehaviour::new("b1".to_string());
+    /// let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
     /// let b2 = BasicBehaviour::new("b2".to_string());
+    /// let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
     ///
-    /// f1.set_action(2, Some(&b1));
-    /// f2.set_action(2, Some(&b2));
+    /// f1.set_action(2, Some(b1_ptr.clone()));
+    /// f2.set_action(2, Some(b2_ptr.clone()));
     ///
     /// let mut belief = BasicBelief::new("b1".to_string());
-    /// belief.set_perception(&b1, Some(0.2)).unwrap();
-    /// belief.set_perception(&b2, Some(0.3)).unwrap();
+    /// let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
+    /// (**belief_ptr).borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
+    /// (**belief_ptr).borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
     ///
     /// agent.set_friend_weight(&f1, Some(0.5));
     /// agent.set_friend_weight(&f2, Some(1.0));
     ///
-    /// assert_eq!(agent.pressure(2, &belief), 0.2);
+    /// assert_eq!(agent.pressure(2, &belief_ptr), 0.2);
     /// ```
     fn pressure(&self, time: SimTime, belief: &BeliefPtr) -> f64 {
         match self.friends.len() {
@@ -903,41 +945,46 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, BasicBelief, Belief};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
     /// use float_cmp::approx_eq;
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut agent = BasicAgent::new();
     /// let mut f1 = BasicAgent::new();
     /// let mut f2 = BasicAgent::new();
     /// let b1 = BasicBehaviour::new("b1".to_string());
+    /// let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
     /// let b2 = BasicBehaviour::new("b2".to_string());
+    /// let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
     ///
-    /// f1.set_action(2, Some(&b1));
-    /// f2.set_action(2, Some(&b2));
+    /// f1.set_action(2, Some(b1_ptr.clone()));
+    /// f2.set_action(2, Some(b2_ptr.clone()));
     ///
-    /// let mut belief = BasicBelief::new("b1".to_string());
-    /// belief.set_perception(&b1, Some(0.2)).unwrap();
-    /// belief.set_perception(&b2, Some(0.3)).unwrap();
+    /// let belief = BasicBelief::new("b1".to_string());
+    /// let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
+    /// (**belief_ptr).borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
+    /// (**belief_ptr).borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
     ///
     /// agent.set_friend_weight(&f1, Some(0.5));
     /// agent.set_friend_weight(&f2, Some(1.0));
     /// // Pressure is 0.2
     ///
     /// let belief2 = BasicBelief::new("b2".to_string());
-    /// let mut beliefs = Vec::<*const dyn Belief>::new();
-    /// beliefs.push(&belief);
-    /// beliefs.push(&belief2);
-    /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
+    /// let belief2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief2)));
+    /// let mut beliefs = Vec::<BeliefPtr>::new();
+    /// beliefs.push(belief_ptr.clone());
+    /// beliefs.push(belief2_ptr.clone());
     ///
-    /// agent.set_activation(2, &belief, Some(1.0)).unwrap();
-    /// agent.set_activation(2, &belief2, Some(1.0)).unwrap();
-    /// belief.set_relationship(&belief, Some(0.5)).unwrap();
-    /// belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+    /// agent.set_activation(2, belief_ptr.clone(), Some(1.0)).unwrap();
+    /// agent.set_activation(2, belief2_ptr.clone(), Some(1.0)).unwrap();
+    /// (**belief_ptr).borrow_mut().set_relationship(belief_ptr.clone(), Some(0.5)).unwrap();
+    /// (**belief_ptr).borrow_mut().set_relationship(belief2_ptr.clone(), Some(-0.75)).unwrap();
     /// // Contextualise is -0.125
     ///
     /// assert!(approx_eq!(
     ///     f64,
-    ///     agent.activation_change(2, &belief, beliefs_slice),
+    ///     agent.activation_change(2, &belief_ptr, &beliefs),
     ///     0.0875,
     ///     ulps = 2
     /// ))
@@ -965,20 +1012,26 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, Behaviour, BasicBelief, Belief};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
+    /// use by_address::ByAddress;
+    /// use std::{rc::Rc, cell::RefCell};
     /// use float_cmp::approx_eq;
+    ///
     /// let mut agent = BasicAgent::new();
     /// let mut f1 = BasicAgent::new();
     /// let mut f2 = BasicAgent::new();
     /// let b1 = BasicBehaviour::new("b1".to_string());
+    /// let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
     /// let b2 = BasicBehaviour::new("b2".to_string());
+    /// let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
     ///
-    /// f1.set_action(2, Some(&b1));
-    /// f2.set_action(2, Some(&b2));
+    /// f1.set_action(2, Some(b1_ptr.clone()));
+    /// f2.set_action(2, Some(b2_ptr.clone()));
     ///
-    /// let mut belief = BasicBelief::new("b1".to_string());
-    /// belief.set_perception(&b1, Some(0.2)).unwrap();
-    /// belief.set_perception(&b2, Some(0.3)).unwrap();
+    /// let belief = BasicBelief::new("b1".to_string());
+    /// let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
+    /// (**belief_ptr).borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
+    /// (**belief_ptr).borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
     ///
     /// agent.set_friend_weight(&f1, Some(0.5)).unwrap();
     /// agent.set_friend_weight(&f2, Some(1.0)).unwrap();
@@ -986,23 +1039,21 @@ impl Agent for BasicAgent {
     /// // Pressure is 0.2
     ///
     /// let belief2 = BasicBelief::new("b2".to_string());
-    /// let mut beliefs = Vec::<*const dyn Belief>::new();
-    /// beliefs.push(&belief);
-    /// beliefs.push(&belief2);
-    /// let beliefs_slice: &[*const dyn Belief] = &beliefs;
+    /// let belief2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief2)));
+    /// let mut beliefs = Vec::<BeliefPtr>::new();
+    /// beliefs.push(belief_ptr.clone());
+    /// beliefs.push(belief2_ptr.clone());
     ///
-    /// agent.set_activation(2, &belief, Some(0.5)).unwrap();
-    /// agent.set_activation(2, &belief2, Some(1.0)).unwrap();
-    /// belief.set_relationship(&belief, Some(1.0)).unwrap();
-    /// belief.set_relationship(&belief2, Some(-0.75)).unwrap();
+    /// agent.set_activation(2, belief_ptr.clone(), Some(0.5)).unwrap();
+    /// agent.set_activation(2, belief2_ptr.clone(), Some(1.0)).unwrap();
+    /// (**belief_ptr).borrow_mut().set_relationship(belief_ptr.clone(), Some(1.0)).unwrap();
+    /// (**belief_ptr).borrow_mut().set_relationship(belief2_ptr.clone(), Some(-0.75)).unwrap();
     /// // Contextualise is -0.0625
     ///
     /// // activation_change is 0.10625
-    /// agent.set_delta(&belief, Some(1.1)).unwrap();
+    /// agent.set_delta(belief_ptr.clone(), Some(1.1)).unwrap();
     ///
-    /// unsafe {
-    ///     agent.update_activation(3, &belief, beliefs_slice).unwrap();
-    /// }
+    /// agent.update_activation(3, &belief_ptr, &beliefs).unwrap();
     ///
     /// assert!(approx_eq!(
     ///     f64,
@@ -1010,7 +1061,7 @@ impl Agent for BasicAgent {
     ///         .get_activations()
     ///         .get(&3)
     ///         .unwrap()
-    ///         .get(&(&belief as *const dyn Belief))
+    ///         .get(&belief_ptr)
     ///         .unwrap(),
     ///     0.65625,
     ///     ulps = 4

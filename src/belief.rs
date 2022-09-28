@@ -40,7 +40,7 @@ pub trait Belief: Named + UUIDd {
     /// This is a value between -1 and +1.
     ///
     /// # Arguments
-    /// - `behaviour`: The [Behaviour].
+    /// - `behaviour`: The [BehaviourPtr].
     /// - `perception`: The new perception.
     ///
     /// # Returns
@@ -197,7 +197,7 @@ impl Belief for BasicBelief {
     /// This is a value between -1 and +1.
     ///
     /// # Arguments
-    /// - `behaviour`: The [Behaviour].
+    /// - `behaviour`: The [BehaviourPtr].
     /// - `perception`: The new perception.
     ///
     /// # Returns

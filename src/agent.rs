@@ -14,30 +14,30 @@ pub type AgentPtr = ByAddress<Rc<RefCell<dyn Agent>>>;
 
 /// An [Agent] which may exist in the model.
 pub trait Agent: UUIDd {
-    /// Gets the activation of an [Agent] towards a [Belief] at a given [SimTime].
+    /// Gets the activation of an [Agent] towards a [BeliefPtr] at a given [SimTime].
     ///
     /// This is always between -1 and +1.
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     ///
     /// # Returns
     /// The activation, if found.
     fn get_activation(&self, time: SimTime, belief: &BeliefPtr) -> Option<f64>;
 
-    /// Gets the activations of an [Agent] towards all [Belief]s at all [SimTime]s.
+    /// Gets the activations of an [Agent] towards all [BeliefPtr]s at all [SimTime]s.
     ///
     /// This is always between -1 and +1.
     ///
-    /// [Belief]s are referenced by their [Uuid]s.
+    /// [BeliefPtr]s are referenced by their [Uuid]s.
     ///
     /// # Return
-    /// A map from simulation time to a new map from [Belief] to the
+    /// A map from simulation time to a new map from [BeliefPtr] to the
     /// activation.
     fn get_activations(&self) -> &HashMap<SimTime, HashMap<BeliefPtr, f64>>;
 
-    /// Sets the activation of an [Agent] towards a [Belief] at a given [SimTime].
+    /// Sets the activation of an [Agent] towards a [BeliefPtr] at a given [SimTime].
     ///
     /// If the activation is [None], then the activation is deleted.
     ///
@@ -45,7 +45,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Arguments
     /// - `time`: The [SimTime] to update.
-    /// - `belief`: The [Belief] to update.
+    /// - `belief`: The [BeliefPtr] to update.
     /// - `activation`: The new activation.
     ///
     /// # Returns
@@ -106,60 +106,60 @@ pub trait Agent: UUIDd {
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
-    /// Gets the [Behaviour] the [Agent] performed at a given [SimTime].
+    /// Gets the [BehaviourPtr] the [Agent] performed at a given [SimTime].
     ///
-    /// Returns the [Behaviour].
+    /// Returns the [BehaviourPtr].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
     ///
     /// # Returns
-    /// The [Behaviour], if one was performed at `time`.
+    /// The [BehaviourPtr], if one was performed at `time`.
     fn get_action(&self, time: SimTime) -> Option<&BehaviourPtr>;
 
-    /// Gets all of the [Behaviour]s that the [Agent] has performed.
+    /// Gets all of the [BehaviourPtr]s that the [Agent] has performed.
     ///
     /// # Returns
-    /// A [HashMap] from [SimTime] to [Behaviour].
+    /// A [HashMap] from [SimTime] to [BehaviourPtr].
     fn get_actions(&self) -> &HashMap<SimTime, BehaviourPtr>;
 
-    /// Sets the [Behaviour] the [Agent] performed at a given time.
+    /// Sets the [BehaviourPtr] the [Agent] performed at a given time.
     ///
-    /// If [None], it unsets the [Behaviour].
+    /// If [None], it unsets the [BehaviourPtr].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
-    /// - `behaviour`: The new [Behaviour] that was performed at `time`.
+    /// - `behaviour`: The new [BehaviourPtr] that was performed at `time`.
     fn set_action(&mut self, time: SimTime, behaviour: Option<BehaviourPtr>);
 
-    /// Gets the delta for a given [Belief].
+    /// Gets the delta for a given [BeliefPtr].
     ///
-    /// This is the value that the activation for the [Belief] changed by
+    /// This is the value that the activation for the [BeliefPtr] changed by
     /// (multiplicatively) at every time step.
     ///
     /// This is a strictly positive value (i.e., > 0).
     ///
     /// # Arguments
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     ///
     /// # Returns
-    /// The delta for the [Belief] and this [Agent], if found.
+    /// The delta for the [BeliefPtr] and this [Agent], if found.
     fn get_delta(&self, belief: &BeliefPtr) -> Option<f64>;
 
     /// Gets all the deltas for the [Agent].
     ///
-    /// This is the value that the activation for the [Belief] changed by
+    /// This is the value that the activation for the [BeliefPtr] changed by
     /// (multiplicatively) at every time step.
     ///
     /// This is a strictly positive value (i.e., > 0).
     ///
     /// # Returns
-    /// A map from [Belief] to delta.
+    /// A map from [BeliefPtr] to delta.
     fn get_deltas(&self) -> &HashMap<BeliefPtr, f64>;
 
-    /// Sets the delta for a given [Belief].
+    /// Sets the delta for a given [BeliefPtr].
     ///
-    /// This is the value that the activation for the [Belief] changed by
+    /// This is the value that the activation for the [BeliefPtr] changed by
     /// (multiplicatively) at every time step.
     ///
     /// This is a strictly positive value (i.e., > 0).
@@ -167,7 +167,7 @@ pub trait Agent: UUIDd {
     /// If `delta` is [None], then this function removes the delta.
     ///
     /// # Arguments
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     /// - `delta`: The new delta.
     ///
     /// # Returns
@@ -175,7 +175,7 @@ pub trait Agent: UUIDd {
     /// [OutOfRangeError], if the delta is not strictly positive.
     fn set_delta(&mut self, belief: BeliefPtr, delta: Option<f64>) -> Result<(), OutOfRangeError>;
 
-    /// Gets the weighted relationship between [Belief]s `b1` and `b2`.
+    /// Gets the weighted relationship between [BeliefPtr]s `b1` and `b2`.
     ///
     /// This is the compatibility for holding `b2`, given that the [Agent]
     /// already holds `b1`.
@@ -183,38 +183,38 @@ pub trait Agent: UUIDd {
     /// This is equal to the activation of `b1`
     /// ([`Agent::get_activation`]), multiplied by the
     /// relationship between `b1` and `b2`
-    /// ([`Belief::get_relationship`]).
+    /// ([`crate::Belief::get_relationship`]).
     ///
     /// Returns [None] if either activation of `b1` at time `t` is [None], or
     /// the relationship between `b1` and `b2` is [None].
     ///
     /// # Arguments
     /// - `t`: The simulation time ([SimTime]).
-    /// - `b1`: The first [Belief].
-    /// - `b2`: The second [Belief].
+    /// - `b1`: The first [BeliefPtr].
+    /// - `b2`: The second [BeliefPtr].
     ///
     /// # Returns
     /// The weighted relationship.
     fn weighted_relationship(&self, t: SimTime, b1: &BeliefPtr, b2: &BeliefPtr) -> Option<f64>;
 
-    /// Gets the context for holding the [Belief] `b`.
+    /// Gets the context for holding the [BeliefPtr] `b`.
     ///
     /// This is the compatibility for holding `b`, given all the beliefs the
     /// agent holds.
     ///
     /// This is the average of [`Agent::weighted_relationship`] for every
-    /// [Belief] (as given in `beliefs).
+    /// [BeliefPtr] (as given in `beliefs).
     ///
     /// # Arguments
     /// - `time`: The simulation time ([SimTime]).
-    /// - `b`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence.
+    /// - `b`: The [BeliefPtr].
+    /// - `beliefs`: All the [BeliefPtr]s in existence.
     ///
     /// # Returns
     /// The context.
     fn contextualise(&self, t: SimTime, b: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64;
 
-    /// Gets the pressure the [Agent] feels to adopt a [Belief] given the
+    /// Gets the pressure the [Agent] feels to adopt a [BeliefPtr] given the
     /// actions of their friends.
     ///
     /// This does not take into account the beliefs that the [Agent] already
@@ -222,21 +222,21 @@ pub trait Agent: UUIDd {
     ///
     /// # Arguments
     /// - `time`: The time as [SimTime].
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     ///
     /// # Returns
     /// The pressure
     fn pressure(&self, time: SimTime, belief: &BeliefPtr) -> f64;
 
     /// Gets the change in activation for the [Agent] as a result of the
-    /// [Behaviour]s observed.
+    /// [BehaviourPtr]s observed.
     ///
     /// This takes into account the beliefs that the agent already holds
     ///
     /// # Arguments
     /// - `time`: The time as [SimTime].
-    /// - `belief`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence.
+    /// - `belief`: The [BeliefPtr].
+    /// - `beliefs`: All the [BeliefPtr]s in existence.
     ///
     /// # Return
     /// - The change in activation
@@ -299,13 +299,13 @@ impl BasicAgent {
 }
 
 impl Agent for BasicAgent {
-    /// Gets the activation of an [Agent] towards a [Belief] at a given [SimTime].
+    /// Gets the activation of an [Agent] towards a [BeliefPtr] at a given [SimTime].
     ///
     /// This is always between -1 and +1.
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     ///
     /// # Returns
     /// The activation, if found.
@@ -330,14 +330,14 @@ impl Agent for BasicAgent {
         }
     }
 
-    /// Gets the activations of an [Agent] towards all [Belief]s at all [SimTime]s.
+    /// Gets the activations of an [Agent] towards all [BeliefPtr]s at all [SimTime]s.
     ///
     /// This is always between -1 and +1.
     ///
-    /// [Belief]s are referenced by their [Uuid]s.
+    /// [BeliefPtr]s are referenced by their [Uuid]s.
     ///
     /// # Return
-    /// A map from simulation time to a new map from [Belief] to the
+    /// A map from simulation time to a new map from [BeliefPtr] to the
     /// activation.
     ///
     /// # Examples
@@ -360,7 +360,7 @@ impl Agent for BasicAgent {
         &self.activations
     }
 
-    /// Sets the activation of an [Agent] towards a [Belief] at a given [SimTime].
+    /// Sets the activation of an [Agent] towards a [BeliefPtr] at a given [SimTime].
     ///
     /// If the activation is [None], then the activation is deleted.
     ///
@@ -368,7 +368,7 @@ impl Agent for BasicAgent {
     ///
     /// # Arguments
     /// - `time`: The [SimTime] to update.
-    /// - `belief`: The [Belief] to update.
+    /// - `belief`: The [BeliefPtr] to update.
     /// - `activation`: The new activation.
     ///
     /// # Returns
@@ -547,15 +547,15 @@ impl Agent for BasicAgent {
         }
     }
 
-    /// Gets the [Behaviour] the [Agent] performed at a given [SimTime].
+    /// Gets the [BehaviourPtr] the [Agent] performed at a given [SimTime].
     ///
-    /// Returns the [Behaviour].
+    /// Returns the [BehaviourPtr].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
     ///
     /// # Returns
-    /// The [Behaviour], if one was performed at `time`.
+    /// The [BehaviourPtr], if one was performed at `time`.
     ///
     /// # Examples
     /// ```
@@ -574,10 +574,10 @@ impl Agent for BasicAgent {
         self.actions.get(&time)
     }
 
-    /// Gets all of the [Behaviour]s that the [Agent] has performed.
+    /// Gets all of the [BehaviourPtr]s that the [Agent] has performed.
     ///
     /// # Returns
-    /// A [HashMap] from [SimTime] to [Behaviour].
+    /// A [HashMap] from [SimTime] to [BehaviourPtr].
     ///
     /// # Examples
     /// ```
@@ -598,13 +598,13 @@ impl Agent for BasicAgent {
         &self.actions
     }
 
-    /// Sets the [Behaviour] the [Agent] performed at a given time.
+    /// Sets the [BehaviourPtr] the [Agent] performed at a given time.
     ///
-    /// If [None], it unsets the [Behaviour].
+    /// If [None], it unsets the [BehaviourPtr].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
-    /// - `behaviour`: The new [Behaviour] that was performed at `time`.
+    /// - `behaviour`: The new [BehaviourPtr] that was performed at `time`.
     ///
     /// # Examples
     /// ```
@@ -626,18 +626,18 @@ impl Agent for BasicAgent {
         };
     }
 
-    /// Gets the delta for a given [Belief].
+    /// Gets the delta for a given [BeliefPtr].
     ///
-    /// This is the value that the activation for the [Belief] changed by
+    /// This is the value that the activation for the [BeliefPtr] changed by
     /// (multiplicatively) at every time step.
     ///
     /// This is a strictly positive value (i.e., > 0).
     ///
     /// # Arguments
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     ///
     /// # Returns
-    /// The delta for the [Belief] and this [Agent], if found.
+    /// The delta for the [BeliefPtr] and this [Agent], if found.
     ///
     /// # Examples
     ///
@@ -658,13 +658,13 @@ impl Agent for BasicAgent {
 
     /// Gets all the deltas for the [Agent].
     ///
-    /// This is the value that the activation for the [Belief] changed by
+    /// This is the value that the activation for the [BeliefPtr] changed by
     /// (multiplicatively) at every time step.
     ///
     /// This is a strictly positive value (i.e., > 0).
     ///
     /// # Returns
-    /// A map from [Belief] to delta.
+    /// A map from [BeliefPtr] to delta.
     ///
     /// # Examples
     ///
@@ -686,9 +686,9 @@ impl Agent for BasicAgent {
         &self.deltas
     }
 
-    /// Sets the delta for a given [Belief].
+    /// Sets the delta for a given [BeliefPtr].
     ///
-    /// This is the value that the activation for the [Belief] changed by
+    /// This is the value that the activation for the [BeliefPtr] changed by
     /// (multiplicatively) at every time step.
     ///
     /// This is a strictly positive value (i.e., > 0).
@@ -696,7 +696,7 @@ impl Agent for BasicAgent {
     /// If `delta` is [None], then this function removes the delta.
     ///
     /// # Arguments
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     /// - `delta`: The new delta.
     ///
     /// # Returns
@@ -734,7 +734,7 @@ impl Agent for BasicAgent {
         }
     }
 
-    /// Gets the weighted relationship between [Belief]s `b1` and `b2`.
+    /// Gets the weighted relationship between [BeliefPtr]s `b1` and `b2`.
     ///
     /// This is the compatibility for holding `b2`, given that the [Agent]
     /// already holds `b1`.
@@ -742,15 +742,15 @@ impl Agent for BasicAgent {
     /// This is equal to the activation of `b1`
     /// ([`Agent::get_activation`]), multiplied by the
     /// relationship between `b1` and `b2`
-    /// ([`Belief::get_relationship`]).
+    /// ([`crate::Belief::get_relationship`]).
     ///
     /// Returns [None] if either activation of `b1` at time `t` is [None], or
     /// the relationship between `b1` and `b2` is [None].
     ///
     /// # Arguments
     /// - `t`: The simulation time ([SimTime]).
-    /// - `b1`: The first [Belief].
-    /// - `b2`: The second [Belief].
+    /// - `b1`: The first [BeliefPtr].
+    /// - `b2`: The second [BeliefPtr].
     ///
     /// # Returns
     /// The weighted relationship.
@@ -782,18 +782,18 @@ impl Agent for BasicAgent {
         }
     }
 
-    /// Gets the context for holding the [Belief] `b`.
+    /// Gets the context for holding the [BeliefPtr] `b`.
     ///
     /// This is the compatibility for holding `b`, given all the beliefs the
     /// agent holds.
     ///
     /// This is the average of [`Agent::weighted_relationship`] for every
-    /// [Belief] (as given in `beliefs).
+    /// [BeliefPtr] (as given in `beliefs).
     ///
     /// # Arguments
     /// - `time`: The simulation time ([SimTime]).
-    /// - `b`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence.
+    /// - `b`: The [BeliefPtr].
+    /// - `beliefs`: All the [BeliefPtr]s in existence.
     ///
     /// # Returns
     /// The context.
@@ -843,7 +843,7 @@ impl Agent for BasicAgent {
         }
     }
 
-    /// Gets the pressure the [Agent] feels to adopt a [Belief] given the
+    /// Gets the pressure the [Agent] feels to adopt a [BeliefPtr] given the
     /// actions of their friends.
     ///
     /// This does not take into account the beliefs that the [Agent] already
@@ -851,7 +851,7 @@ impl Agent for BasicAgent {
     ///
     /// # Arguments
     /// - `time`: The time as [SimTime].
-    /// - `belief`: The [Belief].
+    /// - `belief`: The [BeliefPtr].
     ///
     /// # Returns
     /// The pressure
@@ -909,14 +909,14 @@ impl Agent for BasicAgent {
     }
 
     /// Gets the change in activation for the [Agent] as a result of the
-    /// [Behaviour]s observed.
+    /// [BehaviourPtr]s observed.
     ///
     /// This takes into account the beliefs that the agent already holds
     ///
     /// # Arguments
     /// - `time`: The time as [SimTime].
-    /// - `belief`: The [Belief].
-    /// - `beliefs`: All the [Belief]s in existence.
+    /// - `belief`: The [BeliefPtr].
+    /// - `beliefs`: All the [BeliefPtr]s in existence.
     ///
     /// # Return
     /// - The change in activation
@@ -975,12 +975,12 @@ impl Agent for BasicAgent {
     }
 }
 
-/// Updates the activation for a given [Agent] `time` and [Belief].
+/// Updates the activation for a given [Agent] `time` and [BeliefPtr].
 ///
 /// # Arguments
 /// - `time`: The time as [SimTime].
-/// - `belief`: The [Belief].
-/// - `beliefs`: All the [Belief]s in existence.
+/// - `belief`: The [BeliefPtr].
+/// - `beliefs`: All the [BeliefPtr]s in existence.
 ///
 /// # Return
 /// A [Result] with nothing if [Ok], or an [Err] containing

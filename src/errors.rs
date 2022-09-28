@@ -15,14 +15,14 @@ pub enum OutOfRangeError {
     TooHigh { found: f64, min: f64, max: f64 },
 }
 
-/// An error for [`crate::Agent::update_activation`].
+/// An error for [`crate::update_activation_for_agent`].
 #[derive(Error, Debug, PartialEq)]
 pub enum UpdateActivationError {
-    /// When the activation for a [Belief] at a [SimTime] is [None].
+    /// When the activation for a [`crate::Belief`] identified by [Uuid] at a [SimTime] is [None].
     #[error("Get activation is none")]
     GetActivationNone { time: SimTime, belief: Uuid },
 
-    /// When the delta for a [Belief] is [None].
+    /// When the delta for a [`crate::Belief`] identified by [Uuid] is [None].
     #[error("Get delta is none")]
     GetDeltaNone { belief: Uuid },
 }

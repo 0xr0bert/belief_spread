@@ -569,12 +569,10 @@ impl Agent for BasicAgent {
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
-    /// let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// let b_ptr: BehaviourPtr = b.into();
     ///
     /// a1.set_action(2, Some(b_ptr.clone()));
     /// assert_eq!(a1.get_action(2).unwrap(), &b_ptr);
@@ -591,12 +589,10 @@ impl Agent for BasicAgent {
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
-    /// let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// let b_ptr: BehaviourPtr = b.into();
     ///
     /// a1.set_action(2, Some(b_ptr.clone()));
     /// let actions = a1.get_actions();
@@ -618,12 +614,10 @@ impl Agent for BasicAgent {
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
-    /// let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
+    /// let b_ptr: BehaviourPtr = b.into();
     ///
     /// a1.set_action(2, Some(b_ptr.clone()));
     /// assert_eq!(a1.get_action(2).unwrap(), &b_ptr);
@@ -876,9 +870,9 @@ impl Agent for BasicAgent {
     /// let mut f1 = BasicAgent::new();
     /// let mut f2 = BasicAgent::new();
     /// let b1 = BasicBehaviour::new("b1".to_string());
-    /// let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+    /// let b1_ptr: BehaviourPtr = b1.into();
     /// let b2 = BasicBehaviour::new("b2".to_string());
-    /// let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+    /// let b2_ptr: BehaviourPtr = b2.into();
     ///
     /// f1.set_action(2, Some(b1_ptr.clone()));
     /// f2.set_action(2, Some(b2_ptr.clone()));
@@ -942,9 +936,9 @@ impl Agent for BasicAgent {
     /// let mut f1 = BasicAgent::new();
     /// let mut f2 = BasicAgent::new();
     /// let b1 = BasicBehaviour::new("b1".to_string());
-    /// let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+    /// let b1_ptr: BehaviourPtr = b1.into();
     /// let b2 = BasicBehaviour::new("b2".to_string());
-    /// let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+    /// let b2_ptr: BehaviourPtr = b2.into();
     ///
     /// f1.set_action(2, Some(b1_ptr.clone()));
     /// f2.set_action(2, Some(b2_ptr.clone()));
@@ -1009,9 +1003,9 @@ impl Agent for BasicAgent {
 /// let f2 = BasicAgent::new();
 /// let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
 /// let b1 = BasicBehaviour::new("b1".to_string());
-/// let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+/// let b1_ptr: BehaviourPtr = b1.into();
 /// let b2 = BasicBehaviour::new("b2".to_string());
-/// let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+/// let b2_ptr: BehaviourPtr = b2.into();
 ///
 /// f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
 /// f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -1540,7 +1534,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BehaviourPtr = b.into();
         actions.insert(2, b_ptr.clone());
         a.actions = actions;
 
@@ -1561,7 +1555,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BehaviourPtr = b.into();
         actions.insert(2, b_ptr.clone());
         a.actions = actions;
 
@@ -1587,12 +1581,12 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BehaviourPtr = b.into();
         actions.insert(2, b_ptr.clone());
         a.actions = actions;
 
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         a.set_action(2, Some(b2_ptr.clone()));
         assert_eq!(a.actions.get(&2).unwrap(), &b2_ptr);
@@ -1603,7 +1597,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BehaviourPtr = b.into();
         actions.insert(2, b_ptr.clone());
         a.actions = actions;
 
@@ -1618,7 +1612,7 @@ mod tests {
         a.actions = actions;
 
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         a.set_action(2, Some(b2_ptr.clone()));
         assert_eq!(a.actions.get(&2).unwrap(), &b2_ptr);
@@ -1964,9 +1958,9 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+        let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
         f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -2000,9 +1994,9 @@ mod tests {
         let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
 
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+        let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
         f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -2041,9 +2035,9 @@ mod tests {
         let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
 
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+        let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
         f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -2114,9 +2108,9 @@ mod tests {
         let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
 
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+        let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
         f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -2228,9 +2222,9 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+        let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
         f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -2307,9 +2301,9 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+        let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
         f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -2385,9 +2379,9 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b1)));
+        let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = ByAddress(Rc::new(RefCell::new(b2)));
+        let b2_ptr: BehaviourPtr = b2.into();
 
         f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
         f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));

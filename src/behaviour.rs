@@ -11,6 +11,36 @@ pub trait Behaviour: UUIDd + Named + Debug {}
 /// A [Rc] [RefCell] pointer to [Behaviour] compared by address.
 pub type BehaviourPtr = ByAddress<Rc<RefCell<dyn Behaviour>>>;
 
+impl From<BasicBehaviour> for BehaviourPtr {
+    /// Convert from a [BasicBehaviour] into a [BehaviourPtr].
+    ///
+    /// This consumes the [BasicBehaviour].
+    ///
+    /// # Arguments
+    /// - `b`: The [BasicBehaviour] to convert.
+    ///
+    /// # Returns
+    /// The [BehaviourPtr].
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicBehaviour, BehaviourPtr};
+    ///
+    /// let b = BasicBehaviour::new("Behaviour 1".to_string());
+    /// let b_ptr = BehaviourPtr::from(b);
+    /// ```
+    ///
+    /// ```
+    /// use belief_spread::{BasicBehaviour, BehaviourPtr};
+    ///
+    /// let b = BasicBehaviour::new("Behaviour 1".to_string());
+    /// let b_ptr: BehaviourPtr = b.into();
+    /// ```
+    fn from(b: BasicBehaviour) -> Self {
+        ByAddress(Rc::new(RefCell::new(b)))
+    }
+}
+
 /// A BasicBehaviour is an implementation of a [Behaviour].
 #[derive(Debug)]
 pub struct BasicBehaviour {
@@ -175,5 +205,19 @@ mod tests {
         let b1 = BasicBehaviour::new_with_uuid("b1".to_string(), uuid);
         let b2 = BasicBehaviour::new_with_uuid("b2".to_string(), Uuid::new_v4());
         assert_ne!(b1, b2)
+    }
+
+    #[test]
+    fn test_from() {
+        let b = BasicBehaviour::new("b1".to_string());
+        let b_ptr: BehaviourPtr = BehaviourPtr::from(b);
+        assert_eq!(b_ptr.borrow().name(), "b1");
+    }
+
+    #[test]
+    fn test_into() {
+        let b = BasicBehaviour::new("b1".to_string());
+        let b_ptr: BehaviourPtr = b.into();
+        assert_eq!(b_ptr.borrow().name(), "b1");
     }
 }

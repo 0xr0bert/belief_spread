@@ -770,7 +770,7 @@ impl Agent for BasicAgent {
     /// let b1_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b1)));
     /// let b2 = BasicBelief::new("b2".to_string());
     /// let b2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b2)));
-    /// (**b1_ptr).borrow_mut().set_relationship(b2_ptr.clone(), Some(0.5));
+    /// b1_ptr.borrow_mut().set_relationship(b2_ptr.clone(), Some(0.5));
     /// a.set_activation(2, b1_ptr.clone(), Some(0.5));
     ///
     /// assert_eq!(a.weighted_relationship(2, &b1_ptr, &b2_ptr).unwrap(), 0.25);
@@ -816,12 +816,12 @@ impl Agent for BasicAgent {
     /// a.set_activation(2, b1_ptr.clone(), Some(1.0)).unwrap();
     /// a.set_activation(2, b2_ptr.clone(), Some(1.0)).unwrap();
     ///
-    /// (**b1_ptr).borrow_mut().set_relationship(
+    /// b1_ptr.borrow_mut().set_relationship(
     ///     b1_ptr.clone(),
     ///     Some(0.5),
     /// )
     /// .unwrap();
-    /// (**b1_ptr).borrow_mut().set_relationship(b2_ptr.clone(), Some(-0.75)).unwrap();
+    /// b1_ptr.borrow_mut().set_relationship(b2_ptr.clone(), Some(-0.75)).unwrap();
     ///
     /// let mut beliefs: Vec<BeliefPtr> = Vec::new();
     /// beliefs.push(b1_ptr.clone());
@@ -879,8 +879,8 @@ impl Agent for BasicAgent {
     ///
     /// let mut belief = BasicBelief::new("b1".to_string());
     /// let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-    /// (**belief_ptr).borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
-    /// (**belief_ptr).borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
+    /// belief_ptr.borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
+    /// belief_ptr.borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
     ///
     /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f1))), Some(0.5));
     /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f2))), Some(1.0));
@@ -945,8 +945,8 @@ impl Agent for BasicAgent {
     ///
     /// let belief = BasicBelief::new("b1".to_string());
     /// let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-    /// (**belief_ptr).borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
-    /// (**belief_ptr).borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
+    /// belief_ptr.borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
+    /// belief_ptr.borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
     ///
     /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f1))), Some(0.5));
     /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f2))), Some(1.0));
@@ -960,8 +960,8 @@ impl Agent for BasicAgent {
     ///
     /// agent.set_activation(2, belief_ptr.clone(), Some(1.0)).unwrap();
     /// agent.set_activation(2, belief2_ptr.clone(), Some(1.0)).unwrap();
-    /// (**belief_ptr).borrow_mut().set_relationship(belief_ptr.clone(), Some(0.5)).unwrap();
-    /// (**belief_ptr).borrow_mut().set_relationship(belief2_ptr.clone(), Some(-0.75)).unwrap();
+    /// belief_ptr.borrow_mut().set_relationship(belief_ptr.clone(), Some(0.5)).unwrap();
+    /// belief_ptr.borrow_mut().set_relationship(belief2_ptr.clone(), Some(-0.75)).unwrap();
     /// // Contextualise is -0.125
     ///
     /// assert!(approx_eq!(
@@ -1012,11 +1012,11 @@ impl Agent for BasicAgent {
 ///
 /// let belief = BasicBelief::new("b1".to_string());
 /// let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-/// (**belief_ptr)
+/// belief_ptr
 ///     .borrow_mut()
 ///     .set_perception(b1_ptr.clone(), Some(0.2))
 ///     .unwrap();
-/// (**belief_ptr)
+/// belief_ptr
 ///     .borrow_mut()
 ///     .set_perception(b2_ptr.clone(), Some(0.3))
 ///     .unwrap();
@@ -1038,11 +1038,11 @@ impl Agent for BasicAgent {
 /// agent
 ///     .set_activation(2, belief2_ptr.clone(), Some(1.0))
 ///     .unwrap();
-/// (**belief_ptr)
+/// belief_ptr
 ///     .borrow_mut()
 ///     .set_relationship(belief_ptr.clone(), Some(1.0))
 ///     .unwrap();
-/// (**belief_ptr)
+/// belief_ptr
 ///     .borrow_mut()
 ///     .set_relationship(belief2_ptr.clone(), Some(-0.75))
 ///     .unwrap();
@@ -1785,7 +1785,7 @@ mod tests {
         let b2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
         a.set_activation(2, b1_ptr.clone(), Some(0.5)).unwrap();
-        (**b1_ptr)
+        b1_ptr
             .borrow_mut()
             .set_relationship(b2_ptr.clone(), Some(0.1))
             .unwrap();
@@ -1801,7 +1801,7 @@ mod tests {
         let b2 = BasicBelief::new("b2".to_string());
         let b2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b2)));
 
-        (**b1_ptr)
+        b1_ptr
             .borrow_mut()
             .set_relationship(b2_ptr.clone(), Some(0.1))
             .unwrap();
@@ -1854,11 +1854,11 @@ mod tests {
         a.set_activation(2, b1_ptr.clone(), Some(1.0)).unwrap();
         a.set_activation(2, b2_ptr.clone(), Some(1.0)).unwrap();
 
-        (**b1_ptr)
+        b1_ptr
             .borrow_mut()
             .set_relationship(b1_ptr.clone(), Some(0.5))
             .unwrap();
-        (**b1_ptr)
+        b1_ptr
             .borrow_mut()
             .set_relationship(b2_ptr.clone(), Some(-0.75))
             .unwrap();
@@ -1881,7 +1881,7 @@ mod tests {
         a.set_activation(2, b1_ptr.clone(), Some(0.5)).unwrap();
         a.set_activation(2, b2_ptr.clone(), Some(1.0)).unwrap();
 
-        (**b1_ptr)
+        b1_ptr
             .borrow_mut()
             .set_relationship(b1_ptr.clone(), Some(1.0))
             .unwrap();
@@ -2003,11 +2003,11 @@ mod tests {
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b1_ptr.clone(), Some(0.2))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
@@ -2044,11 +2044,11 @@ mod tests {
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b1_ptr.clone(), Some(0.2))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
@@ -2078,11 +2078,11 @@ mod tests {
             .borrow_mut()
             .set_activation(2, belief2_ptr.clone(), Some(1.0))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief_ptr.clone(), Some(0.5))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief2_ptr.clone(), Some(-0.75))
             .unwrap();
@@ -2117,11 +2117,11 @@ mod tests {
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b1_ptr.clone(), Some(-0.2))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b2_ptr.clone(), Some(-0.3))
             .unwrap();
@@ -2151,11 +2151,11 @@ mod tests {
             .borrow_mut()
             .set_activation(2, belief2_ptr.clone(), Some(1.0))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief_ptr.clone(), Some(0.5))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief2_ptr.clone(), Some(-0.75))
             .unwrap();
@@ -2187,7 +2187,7 @@ mod tests {
 
         let expected_error = UpdateActivationError::GetActivationNone {
             time: 2,
-            belief: (**belief_ptr).borrow().uuid().clone(),
+            belief: belief_ptr.borrow().uuid().clone(),
         };
 
         assert_eq!(
@@ -2231,11 +2231,11 @@ mod tests {
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b1_ptr.clone(), Some(0.2))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
@@ -2260,11 +2260,11 @@ mod tests {
         agent
             .set_activation(2, belief2_ptr.clone(), Some(1.0))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief_ptr.clone(), Some(1.0))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief2_ptr.clone(), Some(-0.75))
             .unwrap();
@@ -2310,11 +2310,11 @@ mod tests {
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b1_ptr.clone(), Some(0.2))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
@@ -2339,11 +2339,11 @@ mod tests {
         agent
             .set_activation(2, belief2_ptr.clone(), Some(1.0))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief_ptr.clone(), Some(1.0))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief2_ptr.clone(), Some(-0.75))
             .unwrap();
@@ -2388,11 +2388,11 @@ mod tests {
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(belief)));
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b1_ptr.clone(), Some(0.2))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_perception(b2_ptr.clone(), Some(0.3))
             .unwrap();
@@ -2418,11 +2418,11 @@ mod tests {
             .set_activation(2, belief2_ptr.clone(), Some(1.0))
             .unwrap();
 
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief_ptr.clone(), Some(1.0))
             .unwrap();
-        (**belief_ptr)
+        belief_ptr
             .borrow_mut()
             .set_relationship(belief2_ptr.clone(), Some(-0.75))
             .unwrap();

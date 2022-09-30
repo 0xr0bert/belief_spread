@@ -14,6 +14,36 @@ use uuid::Uuid;
 /// A [Rc] [RefCell] pointer to a [Belief] that is compared by address;
 pub type BeliefPtr = ByAddress<Rc<RefCell<dyn Belief>>>;
 
+impl From<BasicBelief> for BeliefPtr {
+    /// Convert from a [BasicBelief] into a [BeliefPtr].
+    ///
+    /// This consumes the [BasicBelief].
+    ///
+    /// # Arguments
+    /// - `b`: The [BasicBelief] to convert.
+    ///
+    /// # Returns
+    /// The [BeliefPtr].
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicBelief, BeliefPtr};
+    ///
+    /// let b = BasicBelief::new("Belief 1".to_string());
+    /// let b_ptr = BeliefPtr::from(b);
+    /// ```
+    ///
+    /// ```
+    /// use belief_spread::{BasicBelief, BeliefPtr};
+    ///
+    /// let b = BasicBelief::new("Belief 1".to_string());
+    /// let b_ptr: BeliefPtr = b.into();
+    /// ```
+    fn from(b: BasicBelief) -> Self {
+        ByAddress(Rc::new(RefCell::new(b)))
+    }
+}
+
 /// A Belief.
 pub trait Belief: Named + UUIDd {
     /// Gets the perception, returning a [f64] if found.
@@ -587,5 +617,19 @@ mod tests {
         b1.hash(&mut hasher1);
         b2.hash(&mut hasher2);
         assert_ne!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn test_from() {
+        let b = BasicBelief::new("b1".to_string());
+        let b_ptr: BeliefPtr = BeliefPtr::from(b);
+        assert_eq!(b_ptr.borrow().name(), "b1");
+    }
+
+    #[test]
+    fn test_into() {
+        let b = BasicBelief::new("b1".to_string());
+        let b_ptr: BeliefPtr = b.into();
+        assert_eq!(b_ptr.borrow().name(), "b1");
     }
 }

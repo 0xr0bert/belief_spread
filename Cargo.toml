@@ -1,6 +1,6 @@
 [package]
 name = "belief-spread"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Robert Greener"]
 edition = "2021"
 license = "BSD-3-Clause"

@@ -477,12 +477,10 @@ impl Agent for BasicAgent {
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, AgentPtr, UUIDd};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let a2 = BasicAgent::new();
-    /// let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+    /// let a2_ptr: AgentPtr = a2.into();
     /// a1.set_friend_weight(a2_ptr.clone(), Some(0.1)).unwrap();
     /// let friends = a1.get_friends();
     /// assert_eq!(friends.len(), 1);
@@ -507,12 +505,10 @@ impl Agent for BasicAgent {
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, UUIDd, AgentPtr};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let a2 = BasicAgent::new();
-    /// let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+    /// let a2_ptr: AgentPtr = a2.into();
     /// a1.set_friend_weight(a2_ptr.clone(), Some(0.1)).unwrap();
     /// assert_eq!(a1.get_friend_weight(&a2_ptr).unwrap(), 0.1)
     /// ```
@@ -542,12 +538,10 @@ impl Agent for BasicAgent {
     /// # Examples
     /// ```
     /// use belief_spread::{BasicAgent, Agent, UUIDd, AgentPtr};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let a2 = BasicAgent::new();
-    /// let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+    /// let a2_ptr: AgentPtr = a2.into();
     /// a1.set_friend_weight(a2_ptr.clone(), Some(0.1)).unwrap();
     /// assert_eq!(a1.get_friend_weight(&a2_ptr).unwrap(), 0.1)
     /// ```
@@ -875,8 +869,6 @@ impl Agent for BasicAgent {
     /// ```
     /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
     /// use std::collections::HashMap;
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut agent = BasicAgent::new();
     /// let mut f1 = BasicAgent::new();
@@ -894,8 +886,8 @@ impl Agent for BasicAgent {
     /// belief_ptr.borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
     /// belief_ptr.borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
     ///
-    /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f1))), Some(0.5));
-    /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f2))), Some(1.0));
+    /// agent.set_friend_weight(f1.into(), Some(0.5));
+    /// agent.set_friend_weight(f2.into(), Some(1.0));
     ///
     /// assert_eq!(agent.pressure(2, &belief_ptr), 0.2);
     /// ```
@@ -941,8 +933,6 @@ impl Agent for BasicAgent {
     /// ```
     /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
     /// use float_cmp::approx_eq;
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut agent = BasicAgent::new();
     /// let mut f1 = BasicAgent::new();
@@ -960,8 +950,8 @@ impl Agent for BasicAgent {
     /// belief_ptr.borrow_mut().set_perception(b1_ptr.clone(), Some(0.2)).unwrap();
     /// belief_ptr.borrow_mut().set_perception(b2_ptr.clone(), Some(0.3)).unwrap();
     ///
-    /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f1))), Some(0.5));
-    /// agent.set_friend_weight(ByAddress(Rc::new(RefCell::new(f2))), Some(1.0));
+    /// agent.set_friend_weight(f1.into(), Some(0.5));
+    /// agent.set_friend_weight(f2.into(), Some(1.0));
     /// // Pressure is 0.2
     ///
     /// let belief2 = BasicBelief::new("b2".to_string());
@@ -1006,14 +996,12 @@ impl Agent for BasicAgent {
 /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, AgentPtr,
 ///     BehaviourPtr, BasicBelief, BeliefPtr, update_activation_for_agent};
 /// use float_cmp::approx_eq;
-/// use by_address::ByAddress;
-/// use std::{rc::Rc, cell::RefCell};
 ///
 /// let mut agent = BasicAgent::new();
 /// let f1 = BasicAgent::new();
-/// let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+/// let f1_ptr: AgentPtr = f1.into();
 /// let f2 = BasicAgent::new();
-/// let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+/// let f2_ptr: AgentPtr = f2.into();
 /// let b1 = BasicBehaviour::new("b1".to_string());
 /// let b1_ptr: BehaviourPtr = b1.into();
 /// let b2 = BasicBehaviour::new("b2".to_string());
@@ -1063,7 +1051,7 @@ impl Agent for BasicAgent {
 /// // activation_change is 0.10625
 /// agent.set_delta(belief_ptr.clone(), Some(1.1));
 ///
-/// let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+/// let agent_ptr: AgentPtr = agent.into();
 ///
 /// update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
 ///
@@ -1127,10 +1115,6 @@ impl UUIDd for BasicAgent {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
-
-    use by_address::ByAddress;
-
     use float_cmp::approx_eq;
 
     use crate::{BasicBehaviour, BasicBelief};
@@ -1370,7 +1354,7 @@ mod tests {
     fn get_friends_when_not_empty() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         friends.insert(a2_ptr.clone(), 0.3);
         a.friends = friends;
@@ -1382,7 +1366,7 @@ mod tests {
     fn get_friend_weight_when_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         friends.insert(a2_ptr.clone(), 0.3);
         a.friends = friends;
@@ -1393,7 +1377,7 @@ mod tests {
     fn get_friend_weight_when_not_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         let friends: HashMap<AgentPtr, f64> = HashMap::new();
         a.friends = friends;
         assert_eq!(a.get_friend_weight(&a2_ptr), None);
@@ -1406,7 +1390,7 @@ mod tests {
         a.friends = friends;
 
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         a.set_friend_weight(a2_ptr.clone(), Some(0.5)).unwrap();
         assert_eq!(*a.friends.get(&a2_ptr).unwrap(), 0.5);
     }
@@ -1416,7 +1400,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
@@ -1429,7 +1413,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
@@ -1444,7 +1428,7 @@ mod tests {
         a.friends = friends;
 
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         a.set_friend_weight(a2_ptr.clone(), None).unwrap();
         assert_eq!(a.friends.get(&a2_ptr), None);
     }
@@ -1454,7 +1438,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
@@ -1476,7 +1460,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         a.friends = friends;
 
         let result = a.set_friend_weight(a2_ptr.clone(), Some(-0.1));
@@ -1497,7 +1481,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         friends.insert(a2_ptr.clone(), 0.2);
         a.friends = friends;
 
@@ -1519,7 +1503,7 @@ mod tests {
         let mut a = BasicAgent::new();
         let friends: HashMap<AgentPtr, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(a2)));
+        let a2_ptr: AgentPtr = a2.into();
         a.friends = friends;
 
         let result = a.set_friend_weight(a2_ptr.clone(), Some(1.1));
@@ -1936,11 +1920,11 @@ mod tests {
     #[test]
     fn pressure_when_friends_did_nothing() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
@@ -1964,11 +1948,11 @@ mod tests {
     #[test]
     fn pressure_when_friends_did_something_but_perception_null() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
@@ -1999,11 +1983,11 @@ mod tests {
     #[test]
     fn pressure_when_friends_did_something() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
 
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = b1.into();
@@ -2040,11 +2024,11 @@ mod tests {
     #[test]
     fn activation_change_when_pressure_positive() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
 
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = b1.into();
@@ -2113,11 +2097,11 @@ mod tests {
     #[test]
     fn activation_change_when_pressure_negative() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
 
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = b1.into();
@@ -2195,7 +2179,7 @@ mod tests {
 
         agent.deltas = deltas;
 
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
 
         let expected_error = UpdateActivationError::GetActivationNone {
             time: 2,
@@ -2219,7 +2203,7 @@ mod tests {
             belief: belief_ptr.borrow().uuid().clone(),
         };
 
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         assert_eq!(
             update_activation_for_agent(&agent_ptr, 2, &belief_ptr, &beliefs).unwrap_err(),
             expected_error
@@ -2230,9 +2214,9 @@ mod tests {
     fn update_activation_when_new_value_in_range() {
         let mut agent = BasicAgent::new();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
@@ -2287,7 +2271,7 @@ mod tests {
         delta.insert(belief_ptr.clone(), 1.1);
         agent.deltas = delta;
 
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
 
         update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
 
@@ -2309,9 +2293,9 @@ mod tests {
     fn update_activation_when_new_value_too_high() {
         let mut agent = BasicAgent::new();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
@@ -2366,7 +2350,7 @@ mod tests {
         delta.insert(belief_ptr.clone(), 100000.0);
         agent.deltas = delta;
 
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
 
         assert!(approx_eq!(
@@ -2387,9 +2371,9 @@ mod tests {
     fn update_activation_when_new_value_too_low() {
         let mut agent = BasicAgent::new();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f1)));
+        let f1_ptr: AgentPtr = f1.into();
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(f2)));
+        let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: BehaviourPtr = b1.into();
         let b2 = BasicBehaviour::new("b2".to_string());
@@ -2449,7 +2433,7 @@ mod tests {
         delta.insert(belief_ptr.clone(), -100000.0);
         agent.deltas = delta;
 
-        let agent_ptr: AgentPtr = ByAddress(Rc::new(RefCell::new(agent)));
+        let agent_ptr: AgentPtr = agent.into();
         update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
 
         assert!(approx_eq!(

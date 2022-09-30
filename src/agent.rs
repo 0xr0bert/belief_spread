@@ -12,6 +12,36 @@ use crate::{
 /// A [Rc] [RefCell] pointer to an [Agent] compared by its address.
 pub type AgentPtr = ByAddress<Rc<RefCell<dyn Agent>>>;
 
+impl From<BasicAgent> for AgentPtr {
+    /// Convert from a [BasicAgent] into a [AgentPtr].
+    ///
+    /// This consumes the [BasicAgent].
+    ///
+    /// # Arguments
+    /// - `a`: The [BasicAgent] to convert.
+    ///
+    /// # Returns
+    /// The [AgentPtr].
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicAgent, AgentPtr};
+    ///
+    /// let a = BasicAgent::new();
+    /// let a_ptr = AgentPtr::from(a);
+    /// ```
+    ///
+    /// ```
+    /// use belief_spread::{BasicAgent, AgentPtr};
+    ///
+    /// let a = BasicAgent::new();
+    /// let a_ptr: AgentPtr = a.into();
+    /// ```
+    fn from(a: BasicAgent) -> Self {
+        ByAddress(Rc::new(RefCell::new(a)))
+    }
+}
+
 /// An [Agent] which may exist in the model.
 pub trait Agent: UUIDd {
     /// Gets the activation of an [Agent] towards a [BeliefPtr] at a given [SimTime].
@@ -2434,5 +2464,21 @@ mod tests {
             -1.0,
             ulps = 4
         ))
+    }
+
+    #[test]
+    fn test_from() {
+        let a = BasicAgent::new();
+        let uuid = a.uuid().clone();
+        let a_ptr: AgentPtr = AgentPtr::from(a);
+        assert_eq!(a_ptr.borrow().uuid().clone(), uuid);
+    }
+
+    #[test]
+    fn test_into() {
+        let a = BasicAgent::new();
+        let uuid = a.uuid().clone();
+        let a_ptr: AgentPtr = a.into();
+        assert_eq!(a_ptr.borrow().uuid().clone(), uuid);
     }
 }

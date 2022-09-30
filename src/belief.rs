@@ -288,12 +288,10 @@ impl Belief for BasicBelief {
     ///
     /// ```
     /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, UUIDd, Named, BeliefPtr};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let b2 = BasicBelief::new("Belief 2". to_string());
-    /// let b2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b2)));
+    /// let b2_ptr: BeliefPtr = b2.into();
     /// b.set_relationship(b2_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_relationship(&b2_ptr).unwrap(), 0.1);
     /// ```
@@ -323,12 +321,10 @@ impl Belief for BasicBelief {
     ///
     /// ```
     /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, UUIDd, Named, BeliefPtr};
-    /// use by_address::ByAddress;
-    /// use std::{rc::Rc, cell::RefCell};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let b2 = BasicBelief::new("Belief 2". to_string());
-    /// let b2_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b2)));
+    /// let b2_ptr: BeliefPtr = b2.into();
     /// b.set_relationship(b2_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_relationship(&b2_ptr).unwrap(), 0.1);
     /// ```
@@ -459,7 +455,7 @@ mod tests {
     #[test]
     fn set_when_valid_and_get_relationship_when_exists() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BeliefPtr = b.into();
         assert!(!b_ptr
             .borrow_mut()
             .set_relationship(b_ptr.clone(), Some(0.2))
@@ -470,14 +466,14 @@ mod tests {
     #[test]
     fn get_relationship_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BeliefPtr = b.into();
         assert_eq!(b_ptr.borrow().get_relationship(&b_ptr.clone()), None);
     }
 
     #[test]
     fn set_delete_when_valid_and_get_relationship_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BeliefPtr = b.into();
         assert!(!b_ptr
             .borrow_mut()
             .set_relationship(b_ptr.clone(), Some(0.2))
@@ -493,7 +489,7 @@ mod tests {
     #[test]
     fn set_relationship_when_too_low() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BeliefPtr = b.into();
         let res = b_ptr
             .borrow_mut()
             .set_relationship(b_ptr.clone(), Some(-1.1));
@@ -508,7 +504,7 @@ mod tests {
     #[test]
     fn set_relationship_when_too_high() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: BeliefPtr = ByAddress(Rc::new(RefCell::new(b)));
+        let b_ptr: BeliefPtr = b.into();
         let res = b_ptr
             .borrow_mut()
             .set_relationship(b_ptr.clone(), Some(1.1));

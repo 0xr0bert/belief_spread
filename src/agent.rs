@@ -890,7 +890,7 @@ impl Agent for BasicAgent {
             n => {
                 self.friends
                     .iter()
-                    .map(|(a, w)| {
+                    .filter_map(|(a, w)| {
                         a.borrow()
                             .get_action(time)
                             .map(|behaviour| {
@@ -901,7 +901,6 @@ impl Agent for BasicAgent {
                             })
                             .map(|v| v * w)
                     })
-                    .flatten()
                     .sum::<f64>()
                     / (n as f64)
             }

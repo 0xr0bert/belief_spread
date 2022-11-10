@@ -1104,6 +1104,8 @@ impl UUIDd for BasicAgent {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use float_cmp::approx_eq;
 
     use crate::{BasicBehaviour, BasicBelief};
@@ -1848,9 +1850,7 @@ mod tests {
             .set_relationship(b2_ptr.clone(), Some(-0.75))
             .unwrap();
 
-        let mut beliefs: Vec<BeliefPtr> = Vec::new();
-        beliefs.push(b1_ptr.clone());
-        beliefs.push(b2_ptr.clone());
+        let beliefs: Vec<BeliefPtr> = vec![b1_ptr.clone(), b2_ptr.clone()];
 
         assert_eq!(a.contextualise(2, &b1_ptr, &beliefs), -0.125);
     }
@@ -1871,9 +1871,7 @@ mod tests {
             .set_relationship(b1_ptr.clone(), Some(1.0))
             .unwrap();
 
-        let mut beliefs: Vec<BeliefPtr> = Vec::new();
-        beliefs.push(b1_ptr.clone());
-        beliefs.push(b2_ptr.clone());
+        let beliefs: Vec<BeliefPtr> = vec![b1_ptr.clone(), b2_ptr.clone()];
 
         assert_eq!(a.contextualise(2, &b1_ptr, &beliefs), 0.25);
     }
@@ -1889,9 +1887,7 @@ mod tests {
         a.set_activation(2, b1_ptr.clone(), Some(0.5)).unwrap();
         a.set_activation(2, b2_ptr.clone(), Some(1.0)).unwrap();
 
-        let mut beliefs: Vec<BeliefPtr> = Vec::new();
-        beliefs.push(b1_ptr.clone());
-        beliefs.push(b2_ptr.clone());
+        let beliefs: Vec<BeliefPtr> = vec![b1_ptr.clone(), b2_ptr.clone()];
 
         assert_eq!(a.contextualise(2, &b1_ptr, &beliefs), 0.0);
     }
@@ -2051,9 +2047,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent_ptr
             .borrow_mut()
@@ -2124,9 +2118,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent_ptr
             .borrow_mut()
@@ -2235,9 +2227,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent
             .set_activation(2, belief_ptr.clone(), Some(0.5))
@@ -2314,9 +2304,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent
             .set_activation(2, belief_ptr.clone(), Some(0.5))
@@ -2392,9 +2380,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent
             .set_activation(2, belief_ptr.clone(), Some(0.5))

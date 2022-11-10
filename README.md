@@ -7,5 +7,3 @@ This is a Rust library which will allow you to model how beliefs an behaviours s
 # Contributing
 
 To contribute to this project, please open a pull request / issue.
-
-Please sign off your commits with the `-s` flag in git. This indicates that you have read and agreed to the [Developer Certificate of Origin](https://developercertificate.org/)

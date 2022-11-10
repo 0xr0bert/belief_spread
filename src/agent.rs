@@ -782,13 +782,9 @@ impl Agent for BasicAgent {
     /// assert_eq!(a.weighted_relationship(2, &b1_ptr, &b2_ptr).unwrap(), 0.25);
     /// ```
     fn weighted_relationship(&self, t: SimTime, b1: &BeliefPtr, b2: &BeliefPtr) -> Option<f64> {
-        match self.get_activation(t, b1) {
-            Some(x) => match b1.borrow().get_relationship(b2) {
-                Some(y) => Some(x * y),
-                None => None,
-            },
-            None => None,
-        }
+        self.get_activation(t, b1)
+            .map(|x| b1.borrow().get_relationship(b2).map(|y| x * y))
+            .unwrap_or(None)
     }
 
     /// Gets the context for holding the [BeliefPtr] `b`.

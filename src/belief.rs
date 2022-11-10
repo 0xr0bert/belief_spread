@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn new_with_uuid_assigns_uuid() {
         let uuid = Uuid::new_v4();
-        let b = BasicBelief::new_with_uuid("b".to_string(), uuid.clone());
+        let b = BasicBelief::new_with_uuid("b".to_string(), uuid);
         assert_eq!(b.uuid(), &uuid);
     }
 
@@ -445,10 +445,10 @@ mod tests {
     #[test]
     fn uuid_returns_uuid() {
         let uuid = Uuid::new_v4();
-        let mut b = BasicBelief::new_with_uuid("b".to_string(), uuid.clone());
+        let mut b = BasicBelief::new_with_uuid("b".to_string(), uuid);
         assert_eq!(b.uuid(), &uuid);
         let uuid2 = Uuid::new_v4();
-        b.set_uuid(uuid2.clone());
+        b.set_uuid(uuid2);
         assert_eq!(b.uuid(), &uuid2);
     }
 
@@ -456,10 +456,10 @@ mod tests {
     fn set_when_valid_and_get_relationship_when_exists() {
         let b = BasicBelief::new("belief".to_string());
         let b_ptr: BeliefPtr = b.into();
-        assert!(!b_ptr
+        assert!(b_ptr
             .borrow_mut()
             .set_relationship(b_ptr.clone(), Some(0.2))
-            .is_err());
+            .is_ok());
         assert_eq!(b_ptr.borrow().get_relationship(&b_ptr).unwrap(), 0.2);
     }
 
@@ -474,15 +474,15 @@ mod tests {
     fn set_delete_when_valid_and_get_relationship_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
         let b_ptr: BeliefPtr = b.into();
-        assert!(!b_ptr
+        assert!(b_ptr
             .borrow_mut()
             .set_relationship(b_ptr.clone(), Some(0.2))
-            .is_err());
+            .is_ok());
         assert_eq!(b_ptr.borrow().get_relationship(&b_ptr).unwrap(), 0.2);
-        assert!(!b_ptr
+        assert!(b_ptr
             .borrow_mut()
             .set_relationship(b_ptr.clone(), None)
-            .is_err());
+            .is_ok());
         assert_eq!(b_ptr.borrow().get_relationship(&b_ptr), None);
     }
 
@@ -521,7 +521,7 @@ mod tests {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
         let beh_ptr: BehaviourPtr = beh.into();
-        assert!(!b.set_perception(beh_ptr.clone(), Some(0.1)).is_err());
+        assert!(b.set_perception(beh_ptr.clone(), Some(0.1)).is_ok());
         assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     }
 
@@ -538,9 +538,9 @@ mod tests {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
         let beh_ptr: BehaviourPtr = beh.into();
-        assert!(!b.set_perception(beh_ptr.clone(), Some(0.1)).is_err());
+        assert!(b.set_perception(beh_ptr.clone(), Some(0.1)).is_ok());
         assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
-        assert!(!b.set_perception(beh_ptr.clone(), None).is_err());
+        assert!(b.set_perception(beh_ptr.clone(), None).is_ok());
         assert_eq!(b.get_perception(&beh_ptr), None);
     }
 

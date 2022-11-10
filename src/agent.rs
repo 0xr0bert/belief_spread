@@ -448,9 +448,7 @@ impl Agent for BasicAgent {
                 max: 1.0,
             }),
             Some(x) => {
-                if !self.activations.contains_key(&time) {
-                    self.activations.insert(time, HashMap::new());
-                }
+                self.activations.entry(time).or_insert_with(HashMap::new);
                 self.activations.get_mut(&time).unwrap().insert(belief, x);
                 Ok(())
             }

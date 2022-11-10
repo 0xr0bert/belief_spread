@@ -838,8 +838,7 @@ impl Agent for BasicAgent {
             size => {
                 beliefs
                     .iter()
-                    .map(|b2| self.weighted_relationship(t, b, b2))
-                    .flatten()
+                    .filter_map(|b2| self.weighted_relationship(t, b, b2))
                     .fold(0.0, |acc, v| acc + v)
                     / (size as f64)
             }

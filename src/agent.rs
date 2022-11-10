@@ -328,6 +328,25 @@ impl BasicAgent {
     }
 }
 
+impl Default for BasicAgent {
+    /// Create a new [BasicAgent] with a random [Uuid]
+    ///
+    /// # Returns
+    /// The new [BasicAgent] with a [Uuid] generated using
+    /// [`uuid::Uuid::new_v4`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use belief_spread::BasicAgent;
+    ///
+    /// let a = BasicAgent::default();
+    /// ```
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Agent for BasicAgent {
     /// Gets the activation of an [Agent] towards a [BeliefPtr] at a given [SimTime].
     ///
@@ -1111,6 +1130,13 @@ mod tests {
     use crate::{BasicBehaviour, BasicBelief};
 
     use super::*;
+
+    #[test]
+    fn default_assigns_random_uuid() {
+        let a1 = BasicAgent::default();
+        let a2 = BasicAgent::default();
+        assert_ne!(a1.uuid, a2.uuid);
+    }
 
     #[test]
     fn new_assigns_random_uuid() {

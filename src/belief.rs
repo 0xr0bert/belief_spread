@@ -359,7 +359,7 @@ impl Belief for BasicBelief {
 impl Named for BasicBelief {
     /// Get the name of the [BasicBelief].
     fn name(&self) -> &str {
-        return &self.name;
+        &self.name
     }
 
     /// Set the name of the [BasicBelief].
@@ -371,7 +371,7 @@ impl Named for BasicBelief {
 impl UUIDd for BasicBelief {
     /// Get the UUID of the [BasicBelief].
     fn uuid(&self) -> &Uuid {
-        return &self.uuid;
+        &self.uuid
     }
 
     /// Set the UUID of the [BasicBelief].

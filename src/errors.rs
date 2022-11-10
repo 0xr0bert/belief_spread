@@ -16,7 +16,7 @@ pub enum OutOfRangeError {
 }
 
 /// An error for [`crate::update_activation_for_agent`].
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum UpdateActivationError {
     /// When the activation for a [`crate::Belief`] identified by [Uuid] at a [SimTime] is [None].
     #[error("Get activation is none")]

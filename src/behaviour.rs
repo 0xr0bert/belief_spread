@@ -149,28 +149,28 @@ mod tests {
     #[test]
     fn new_with_uuid_assigns_uuid() {
         let uuid = Uuid::new_v4();
-        let b1 = BasicBehaviour::new_with_uuid("b1".to_string(), uuid.clone());
+        let b1 = BasicBehaviour::new_with_uuid("b1".to_string(), uuid);
         assert_eq!(b1.uuid(), &uuid);
     }
 
     #[test]
     fn new_with_uuid_assigns_name() {
         let uuid = Uuid::new_v4();
-        let b1 = BasicBehaviour::new_with_uuid("b1".to_string(), uuid.clone());
+        let b1 = BasicBehaviour::new_with_uuid("b1".to_string(), uuid);
         assert_eq!(b1.name(), "b1");
     }
 
     #[test]
     fn uuid_returns_uuid() {
         let uuid = Uuid::new_v4();
-        let b = BasicBehaviour::new_with_uuid("b".to_string(), uuid.clone());
+        let b = BasicBehaviour::new_with_uuid("b".to_string(), uuid);
         assert_eq!(b.uuid(), &uuid);
     }
 
     #[test]
     fn set_uuid_sets_uuid() {
         let uuid = Uuid::new_v4();
-        let mut b = BasicBehaviour::new_with_uuid("b".to_string(), uuid.clone());
+        let mut b = BasicBehaviour::new_with_uuid("b".to_string(), uuid);
         assert_eq!(b.uuid(), &uuid);
         let uuid2 = Uuid::new_v4();
         b.set_uuid(uuid2);

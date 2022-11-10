@@ -894,10 +894,7 @@ impl Agent for BasicAgent {
                         a.borrow()
                             .get_action(time)
                             .map(|behaviour| {
-                                belief
-                                    .borrow()
-                                    .get_perception(behaviour)
-                                    .unwrap_or_else(|| 0.0)
+                                belief.borrow().get_perception(behaviour).unwrap_or(0.0)
                             })
                             .map(|v| v * w)
                     })

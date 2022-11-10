@@ -1066,14 +1066,14 @@ pub fn update_activation_for_agent(
     let delta = agent.borrow().get_delta(belief);
     match delta {
         None => Err(UpdateActivationError::GetDeltaNone {
-            belief: belief.borrow().uuid().clone(),
+            belief: *belief.borrow().uuid(),
         }),
         Some(d) => {
             let activation = agent.borrow().get_activation(time - 1, belief);
             match activation {
                 None => Err(UpdateActivationError::GetActivationNone {
                     time: time - 1,
-                    belief: belief.borrow().uuid().clone(),
+                    belief: *belief.borrow().uuid(),
                 }),
                 Some(a) => {
                     let activation_change =
@@ -1120,14 +1120,14 @@ mod tests {
     #[test]
     fn new_with_uuid_assigns_uuid() {
         let u = Uuid::new_v4();
-        let a = BasicAgent::new_with_uuid(u.clone());
+        let a = BasicAgent::new_with_uuid(u);
         assert_eq!(a.uuid, u)
     }
 
     #[test]
     fn uuid_returns_uuid() {
         let u = Uuid::new_v4();
-        let a = BasicAgent::new_with_uuid(u.clone());
+        let a = BasicAgent::new_with_uuid(u);
         assert_eq!(a.uuid(), &u)
     }
 
@@ -1135,7 +1135,7 @@ mod tests {
     fn set_uuid_sets_uuid() {
         let mut a = BasicAgent::new();
         let u = Uuid::new_v4();
-        a.set_uuid(u.clone());
+        a.set_uuid(u);
         assert_eq!(a.uuid, u)
     }
 
@@ -2172,7 +2172,7 @@ mod tests {
 
         let expected_error = UpdateActivationError::GetActivationNone {
             time: 2,
-            belief: belief_ptr.borrow().uuid().clone(),
+            belief: *belief_ptr.borrow().uuid(),
         };
 
         assert_eq!(
@@ -2189,7 +2189,7 @@ mod tests {
         let beliefs: Vec<BeliefPtr> = Vec::new();
 
         let expected_error = UpdateActivationError::GetDeltaNone {
-            belief: belief_ptr.borrow().uuid().clone(),
+            belief: *belief_ptr.borrow().uuid(),
         };
 
         let agent_ptr: AgentPtr = agent.into();
@@ -2442,16 +2442,16 @@ mod tests {
     #[test]
     fn test_from() {
         let a = BasicAgent::new();
-        let uuid = a.uuid().clone();
+        let uuid = *a.uuid();
         let a_ptr: AgentPtr = AgentPtr::from(a);
-        assert_eq!(a_ptr.borrow().uuid().clone(), uuid);
+        assert_eq!(*a_ptr.borrow().uuid(), uuid);
     }
 
     #[test]
     fn test_into() {
         let a = BasicAgent::new();
-        let uuid = a.uuid().clone();
+        let uuid = *a.uuid();
         let a_ptr: AgentPtr = a.into();
-        assert_eq!(a_ptr.borrow().uuid().clone(), uuid);
+        assert_eq!(*a_ptr.borrow().uuid(), uuid);
     }
 }

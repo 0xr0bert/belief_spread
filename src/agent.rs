@@ -328,6 +328,25 @@ impl BasicAgent {
     }
 }
 
+impl Default for BasicAgent {
+    /// Create a new [BasicAgent] with a random [Uuid]
+    ///
+    /// # Returns
+    /// The new [BasicAgent] with a [Uuid] generated using
+    /// [`uuid::Uuid::new_v4`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use belief_spread::BasicAgent;
+    ///
+    /// let a = BasicAgent::default();
+    /// ```
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Agent for BasicAgent {
     /// Gets the activation of an [Agent] towards a [BeliefPtr] at a given [SimTime].
     ///
@@ -448,9 +467,7 @@ impl Agent for BasicAgent {
                 max: 1.0,
             }),
             Some(x) => {
-                if !self.activations.contains_key(&time) {
-                    self.activations.insert(time, HashMap::new());
-                }
+                self.activations.entry(time).or_insert_with(HashMap::new);
                 self.activations.get_mut(&time).unwrap().insert(belief, x);
                 Ok(())
             }
@@ -784,13 +801,9 @@ impl Agent for BasicAgent {
     /// assert_eq!(a.weighted_relationship(2, &b1_ptr, &b2_ptr).unwrap(), 0.25);
     /// ```
     fn weighted_relationship(&self, t: SimTime, b1: &BeliefPtr, b2: &BeliefPtr) -> Option<f64> {
-        match self.get_activation(t, b1) {
-            Some(x) => match b1.borrow().get_relationship(b2) {
-                Some(y) => Some(x * y),
-                None => None,
-            },
-            None => None,
-        }
+        self.get_activation(t, b1)
+            .map(|x| b1.borrow().get_relationship(b2).map(|y| x * y))
+            .unwrap_or(None)
     }
 
     /// Gets the context for holding the [BeliefPtr] `b`.
@@ -844,8 +857,7 @@ impl Agent for BasicAgent {
             size => {
                 beliefs
                     .iter()
-                    .map(|b2| self.weighted_relationship(t, b, b2))
-                    .flatten()
+                    .filter_map(|b2| self.weighted_relationship(t, b, b2))
                     .fold(0.0, |acc, v| acc + v)
                     / (size as f64)
             }
@@ -897,18 +909,14 @@ impl Agent for BasicAgent {
             n => {
                 self.friends
                     .iter()
-                    .map(|(a, w)| {
+                    .filter_map(|(a, w)| {
                         a.borrow()
                             .get_action(time)
                             .map(|behaviour| {
-                                belief
-                                    .borrow()
-                                    .get_perception(behaviour)
-                                    .unwrap_or_else(|| 0.0)
+                                belief.borrow().get_perception(behaviour).unwrap_or(0.0)
                             })
                             .map(|v| v * w)
                     })
-                    .flatten()
                     .sum::<f64>()
                     / (n as f64)
             }
@@ -1077,14 +1085,14 @@ pub fn update_activation_for_agent(
     let delta = agent.borrow().get_delta(belief);
     match delta {
         None => Err(UpdateActivationError::GetDeltaNone {
-            belief: belief.borrow().uuid().clone(),
+            belief: *belief.borrow().uuid(),
         }),
         Some(d) => {
             let activation = agent.borrow().get_activation(time - 1, belief);
             match activation {
                 None => Err(UpdateActivationError::GetActivationNone {
                     time: time - 1,
-                    belief: belief.borrow().uuid().clone(),
+                    belief: *belief.borrow().uuid(),
                 }),
                 Some(a) => {
                     let activation_change =
@@ -1115,11 +1123,20 @@ impl UUIDd for BasicAgent {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use float_cmp::approx_eq;
 
     use crate::{BasicBehaviour, BasicBelief};
 
     use super::*;
+
+    #[test]
+    fn default_assigns_random_uuid() {
+        let a1 = BasicAgent::default();
+        let a2 = BasicAgent::default();
+        assert_ne!(a1.uuid, a2.uuid);
+    }
 
     #[test]
     fn new_assigns_random_uuid() {
@@ -1131,14 +1148,14 @@ mod tests {
     #[test]
     fn new_with_uuid_assigns_uuid() {
         let u = Uuid::new_v4();
-        let a = BasicAgent::new_with_uuid(u.clone());
+        let a = BasicAgent::new_with_uuid(u);
         assert_eq!(a.uuid, u)
     }
 
     #[test]
     fn uuid_returns_uuid() {
         let u = Uuid::new_v4();
-        let a = BasicAgent::new_with_uuid(u.clone());
+        let a = BasicAgent::new_with_uuid(u);
         assert_eq!(a.uuid(), &u)
     }
 
@@ -1146,7 +1163,7 @@ mod tests {
     fn set_uuid_sets_uuid() {
         let mut a = BasicAgent::new();
         let u = Uuid::new_v4();
-        a.set_uuid(u.clone());
+        a.set_uuid(u);
         assert_eq!(a.uuid, u)
     }
 
@@ -1859,9 +1876,7 @@ mod tests {
             .set_relationship(b2_ptr.clone(), Some(-0.75))
             .unwrap();
 
-        let mut beliefs: Vec<BeliefPtr> = Vec::new();
-        beliefs.push(b1_ptr.clone());
-        beliefs.push(b2_ptr.clone());
+        let beliefs: Vec<BeliefPtr> = vec![b1_ptr.clone(), b2_ptr.clone()];
 
         assert_eq!(a.contextualise(2, &b1_ptr, &beliefs), -0.125);
     }
@@ -1882,9 +1897,7 @@ mod tests {
             .set_relationship(b1_ptr.clone(), Some(1.0))
             .unwrap();
 
-        let mut beliefs: Vec<BeliefPtr> = Vec::new();
-        beliefs.push(b1_ptr.clone());
-        beliefs.push(b2_ptr.clone());
+        let beliefs: Vec<BeliefPtr> = vec![b1_ptr.clone(), b2_ptr.clone()];
 
         assert_eq!(a.contextualise(2, &b1_ptr, &beliefs), 0.25);
     }
@@ -1900,9 +1913,7 @@ mod tests {
         a.set_activation(2, b1_ptr.clone(), Some(0.5)).unwrap();
         a.set_activation(2, b2_ptr.clone(), Some(1.0)).unwrap();
 
-        let mut beliefs: Vec<BeliefPtr> = Vec::new();
-        beliefs.push(b1_ptr.clone());
-        beliefs.push(b2_ptr.clone());
+        let beliefs: Vec<BeliefPtr> = vec![b1_ptr.clone(), b2_ptr.clone()];
 
         assert_eq!(a.contextualise(2, &b1_ptr, &beliefs), 0.0);
     }
@@ -2062,9 +2073,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent_ptr
             .borrow_mut()
@@ -2135,9 +2144,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent_ptr
             .borrow_mut()
@@ -2183,7 +2190,7 @@ mod tests {
 
         let expected_error = UpdateActivationError::GetActivationNone {
             time: 2,
-            belief: belief_ptr.borrow().uuid().clone(),
+            belief: *belief_ptr.borrow().uuid(),
         };
 
         assert_eq!(
@@ -2200,7 +2207,7 @@ mod tests {
         let beliefs: Vec<BeliefPtr> = Vec::new();
 
         let expected_error = UpdateActivationError::GetDeltaNone {
-            belief: belief_ptr.borrow().uuid().clone(),
+            belief: *belief_ptr.borrow().uuid(),
         };
 
         let agent_ptr: AgentPtr = agent.into();
@@ -2246,9 +2253,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent
             .set_activation(2, belief_ptr.clone(), Some(0.5))
@@ -2325,9 +2330,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent
             .set_activation(2, belief_ptr.clone(), Some(0.5))
@@ -2403,9 +2406,7 @@ mod tests {
 
         let belief2 = BasicBelief::new("b2".to_string());
         let belief2_ptr: BeliefPtr = belief2.into();
-        let mut beliefs = Vec::<BeliefPtr>::new();
-        beliefs.push(belief_ptr.clone());
-        beliefs.push(belief2_ptr.clone());
+        let beliefs = vec![belief_ptr.clone(), belief2_ptr.clone()];
 
         agent
             .set_activation(2, belief_ptr.clone(), Some(0.5))
@@ -2453,16 +2454,16 @@ mod tests {
     #[test]
     fn test_from() {
         let a = BasicAgent::new();
-        let uuid = a.uuid().clone();
+        let uuid = *a.uuid();
         let a_ptr: AgentPtr = AgentPtr::from(a);
-        assert_eq!(a_ptr.borrow().uuid().clone(), uuid);
+        assert_eq!(*a_ptr.borrow().uuid(), uuid);
     }
 
     #[test]
     fn test_into() {
         let a = BasicAgent::new();
-        let uuid = a.uuid().clone();
+        let uuid = *a.uuid();
         let a_ptr: AgentPtr = a.into();
-        assert_eq!(a_ptr.borrow().uuid().clone(), uuid);
+        assert_eq!(*a_ptr.borrow().uuid(), uuid);
     }
 }

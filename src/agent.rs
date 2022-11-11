@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::{OutOfRangeError, UpdateActivationError},
-    BehaviourPtr, BeliefPtr, SimTime, UUIDd,
+    Behaviour, BeliefPtr, SimTime, UUIDd,
 };
 
 /// A [Rc] [RefCell] pointer to an [Agent] compared by its address.
@@ -136,31 +136,31 @@ pub trait Agent: UUIDd {
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
-    /// Gets the [BehaviourPtr] the [Agent] performed at a given [SimTime].
+    /// Gets the [*const dyn Behaviour] the [Agent] performed at a given [SimTime].
     ///
-    /// Returns the [BehaviourPtr].
+    /// Returns the [*const dyn Behaviour].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
     ///
     /// # Returns
-    /// The [BehaviourPtr], if one was performed at `time`.
-    fn get_action(&self, time: SimTime) -> Option<&BehaviourPtr>;
+    /// The [*const dyn Behaviour], if one was performed at `time`.
+    fn get_action(&self, time: SimTime) -> Option<*const dyn Behaviour>;
 
-    /// Gets all of the [BehaviourPtr]s that the [Agent] has performed.
+    /// Gets all of the [*const dyn Behaviour]s that the [Agent] has performed.
     ///
     /// # Returns
-    /// A [HashMap] from [SimTime] to [BehaviourPtr].
-    fn get_actions(&self) -> &HashMap<SimTime, BehaviourPtr>;
+    /// A [HashMap] from [SimTime] to [*const dyn Behaviour].
+    fn get_actions(&self) -> &HashMap<SimTime, *const dyn Behaviour>;
 
-    /// Sets the [BehaviourPtr] the [Agent] performed at a given time.
+    /// Sets the [*const dyn Behaviour] the [Agent] performed at a given time.
     ///
-    /// If [None], it unsets the [BehaviourPtr].
+    /// If [None], it unsets the [*const dyn Behaviour].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
-    /// - `behaviour`: The new [BehaviourPtr] that was performed at `time`.
-    fn set_action(&mut self, time: SimTime, behaviour: Option<BehaviourPtr>);
+    /// - `behaviour`: The new [*const dyn Behaviour] that was performed at `time`.
+    fn set_action(&mut self, time: SimTime, behaviour: Option<*const dyn Behaviour>);
 
     /// Gets the delta for a given [BeliefPtr].
     ///
@@ -244,7 +244,7 @@ pub trait Agent: UUIDd {
     /// The context.
     fn contextualise(&self, t: SimTime, b: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64;
 
-    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<BehaviourPtr, f64>;
+    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<*const dyn Behaviour, f64>;
 
     /// Gets the pressure the [Agent] feels to adopt a [BeliefPtr] given the
     /// actions of their friends.
@@ -255,15 +255,19 @@ pub trait Agent: UUIDd {
     /// # Arguments
     /// - `belief`: The [BeliefPtr].
     /// - `actions_of_friends`: The actions of friends at a given time. This is
-    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     a map from [*const dyn Behaviour] to the total weight of friends performing
     ///     that behaviour.
     ///
     /// # Returns
     /// The pressure
-    fn pressure(&self, belief: &BeliefPtr, actions_of_friends: &HashMap<BehaviourPtr, f64>) -> f64;
+    fn pressure(
+        &self,
+        belief: &BeliefPtr,
+        actions_of_friends: &HashMap<*const dyn Behaviour, f64>,
+    ) -> f64;
 
     /// Gets the change in activation for the [Agent] as a result of the
-    /// [BehaviourPtr]s observed.
+    /// [*const dyn Behaviour]s observed.
     ///
     /// This takes into account the beliefs that the agent already holds
     ///
@@ -272,7 +276,7 @@ pub trait Agent: UUIDd {
     /// - `belief`: The [BeliefPtr].
     /// - `beliefs`: All the [BeliefPtr]s in existence.
     /// - `actions_of_friends`: The actions of friends at a given time. This is
-    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     a map from [*const dyn Behaviour] to the total weight of friends performing
     ///     that behaviour.
     ///
     /// # Return
@@ -282,7 +286,7 @@ pub trait Agent: UUIDd {
         time: SimTime,
         belief: &BeliefPtr,
         beliefs: &[BeliefPtr],
-        actions_of_friends: &HashMap<BehaviourPtr, f64>,
+        actions_of_friends: &HashMap<*const dyn Behaviour, f64>,
     ) -> f64;
 }
 
@@ -291,7 +295,7 @@ pub struct BasicAgent {
     uuid: Uuid,
     activations: HashMap<SimTime, HashMap<BeliefPtr, f64>>,
     friends: HashMap<AgentPtr, f64>,
-    actions: HashMap<SimTime, BehaviourPtr>,
+    actions: HashMap<SimTime, *const dyn Behaviour>,
     deltas: HashMap<BeliefPtr, f64>,
 }
 
@@ -602,73 +606,73 @@ impl Agent for BasicAgent {
         }
     }
 
-    /// Gets the [BehaviourPtr] the [Agent] performed at a given [SimTime].
+    /// Gets the [*const dyn Behaviour] the [Agent] performed at a given [SimTime].
     ///
-    /// Returns the [BehaviourPtr].
+    /// Returns the [*const dyn Behaviour].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
     ///
     /// # Returns
-    /// The [BehaviourPtr], if one was performed at `time`.
+    /// The [*const dyn Behaviour], if one was performed at `time`.
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, *const dyn Behaviour, UUIDd};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
-    /// let b_ptr: BehaviourPtr = b.into();
+    /// let b_ptr: *const dyn Behaviour = b.into();
     ///
     /// a1.set_action(2, Some(b_ptr.clone()));
     /// assert_eq!(a1.get_action(2).unwrap(), &b_ptr);
     /// ```
-    fn get_action(&self, time: SimTime) -> Option<&BehaviourPtr> {
-        self.actions.get(&time)
+    fn get_action(&self, time: SimTime) -> Option<*const dyn Behaviour> {
+        self.actions.get(&time).cloned()
     }
 
-    /// Gets all of the [BehaviourPtr]s that the [Agent] has performed.
+    /// Gets all of the [*const dyn Behaviour]s that the [Agent] has performed.
     ///
     /// # Returns
-    /// A [HashMap] from [SimTime] to [BehaviourPtr].
+    /// A [HashMap] from [SimTime] to [*const dyn Behaviour].
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, *const dyn Behaviour, UUIDd};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
-    /// let b_ptr: BehaviourPtr = b.into();
+    /// let b_ptr: *const dyn Behaviour = b.into();
     ///
     /// a1.set_action(2, Some(b_ptr.clone()));
     /// let actions = a1.get_actions();
     /// assert_eq!(actions.len(), 1);
     /// assert_eq!(actions.get(&2).unwrap(), &b_ptr);
     /// ```
-    fn get_actions(&self) -> &HashMap<SimTime, BehaviourPtr> {
+    fn get_actions(&self) -> &HashMap<SimTime, *const dyn Behaviour> {
         &self.actions
     }
 
-    /// Sets the [BehaviourPtr] the [Agent] performed at a given time.
+    /// Sets the [*const dyn Behaviour] the [Agent] performed at a given time.
     ///
-    /// If [None], it unsets the [BehaviourPtr].
+    /// If [None], it unsets the [*const dyn Behaviour].
     ///
     /// # Arguments
     /// - `time`: The [SimTime].
-    /// - `behaviour`: The new [BehaviourPtr] that was performed at `time`.
+    /// - `behaviour`: The new [*const dyn Behaviour] that was performed at `time`.
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, *const dyn Behaviour, UUIDd};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let b = BasicBehaviour::new("b1".to_string());
-    /// let b_ptr: BehaviourPtr = b.into();
+    /// let b_ptr: *const dyn Behaviour = b.into();
     ///
     /// a1.set_action(2, Some(b_ptr.clone()));
     /// assert_eq!(a1.get_action(2).unwrap(), &b_ptr);
     /// ```
-    fn set_action(&mut self, time: SimTime, behaviour: Option<BehaviourPtr>) {
+    fn set_action(&mut self, time: SimTime, behaviour: Option<*const dyn Behaviour>) {
         match behaviour {
             Some(x) => self.actions.insert(time, x),
             None => self.actions.remove(&time),
@@ -877,10 +881,10 @@ impl Agent for BasicAgent {
         }
     }
 
-    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<BehaviourPtr, f64> {
+    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<*const dyn Behaviour, f64> {
         self.friends
             .iter()
-            .filter_map(|(a, &w)| a.borrow().get_action(t).map(|action| (action.clone(), w)))
+            .filter_map(|(a, &w)| a.borrow().get_action(t).map(|action| (action, w)))
             .fold(HashMap::new(), |mut map, (beh, w)| {
                 *map.entry(beh).or_insert(0.0) += w;
                 map
@@ -896,7 +900,7 @@ impl Agent for BasicAgent {
     /// # Arguments
     /// - `belief`: The [BeliefPtr].
     /// - `actions_of_friends`: The actions of friends at a given time. This is
-    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     a map from [*const dyn Behaviour] to the total weight of friends performing
     ///     that behaviour.
     ///
     /// # Returns
@@ -904,16 +908,16 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, *const dyn Behaviour, BasicBelief, BeliefPtr};
     /// use std::collections::HashMap;
     ///
     /// let mut agent = BasicAgent::new();
     /// let mut f1 = BasicAgent::new();
     /// let mut f2 = BasicAgent::new();
     /// let b1 = BasicBehaviour::new("b1".to_string());
-    /// let b1_ptr: BehaviourPtr = b1.into();
+    /// let b1_ptr: *const dyn Behaviour = b1.into();
     /// let b2 = BasicBehaviour::new("b2".to_string());
-    /// let b2_ptr: BehaviourPtr = b2.into();
+    /// let b2_ptr: *const dyn Behaviour = b2.into();
     ///
     /// f1.set_action(2, Some(b1_ptr.clone()));
     /// f2.set_action(2, Some(b2_ptr.clone()));
@@ -930,13 +934,17 @@ impl Agent for BasicAgent {
     ///
     /// assert_eq!(agent.pressure(&belief_ptr, &actions), 0.2);
     /// ```
-    fn pressure(&self, belief: &BeliefPtr, actions_of_friends: &HashMap<BehaviourPtr, f64>) -> f64 {
+    fn pressure(
+        &self,
+        belief: &BeliefPtr,
+        actions_of_friends: &HashMap<*const dyn Behaviour, f64>,
+    ) -> f64 {
         match self.friends.len() {
             0 => 0.0,
             n => {
                 actions_of_friends
                     .iter()
-                    .filter_map(|(beh, w)| belief.borrow().get_perception(beh).map(|v| w * v))
+                    .filter_map(|(&beh, w)| belief.borrow().get_perception(beh).map(|v| w * v))
                     .sum::<f64>()
                     / (n as f64)
             }
@@ -944,7 +952,7 @@ impl Agent for BasicAgent {
     }
 
     /// Gets the change in activation for the [Agent] as a result of the
-    /// [BehaviourPtr]s observed.
+    /// [*const dyn Behaviour]s observed.
     ///
     /// This takes into account the beliefs that the agent already holds
     ///
@@ -953,7 +961,7 @@ impl Agent for BasicAgent {
     /// - `belief`: The [BeliefPtr].
     /// - `beliefs`: All the [BeliefPtr]s in existence.
     /// - `actions_of_friends`: The actions of friends at a given time. This is
-    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     a map from [*const dyn Behaviour] to the total weight of friends performing
     ///     that behaviour.
     ///
     /// # Return
@@ -962,16 +970,16 @@ impl Agent for BasicAgent {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, BehaviourPtr, BasicBelief, BeliefPtr};
+    /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, *const dyn Behaviour, BasicBelief, BeliefPtr};
     /// use float_cmp::approx_eq;
     ///
     /// let mut agent = BasicAgent::new();
     /// let mut f1 = BasicAgent::new();
     /// let mut f2 = BasicAgent::new();
     /// let b1 = BasicBehaviour::new("b1".to_string());
-    /// let b1_ptr: BehaviourPtr = b1.into();
+    /// let b1_ptr: *const dyn Behaviour = b1.into();
     /// let b2 = BasicBehaviour::new("b2".to_string());
-    /// let b2_ptr: BehaviourPtr = b2.into();
+    /// let b2_ptr: *const dyn Behaviour = b2.into();
     ///
     /// f1.set_action(2, Some(b1_ptr.clone()));
     /// f2.set_action(2, Some(b2_ptr.clone()));
@@ -1010,7 +1018,7 @@ impl Agent for BasicAgent {
         time: SimTime,
         belief: &BeliefPtr,
         beliefs: &[BeliefPtr],
-        actions_of_friends: &HashMap<BehaviourPtr, f64>,
+        actions_of_friends: &HashMap<*const dyn Behaviour, f64>,
     ) -> f64 {
         match self.pressure(belief, actions_of_friends) {
             p if p > 0.0 => (1.0 + self.contextualise(time, belief, beliefs)) / 2.0 * p,
@@ -1026,7 +1034,7 @@ impl Agent for BasicAgent {
 /// - `belief`: The [BeliefPtr].
 /// - `beliefs`: All the [BeliefPtr]s in existence.
 /// - `actions_of_friends`: The actions of friends at time - 1. This is
-///     a map from [BehaviourPtr] to the total weight of friends performing
+///     a map from [*const dyn Behaviour] to the total weight of friends performing
 ///     that behaviour.
 ///
 /// # Return
@@ -1036,7 +1044,7 @@ impl Agent for BasicAgent {
 /// # Examples
 /// ```
 /// use belief_spread::{BasicAgent, Agent, BasicBehaviour, AgentPtr,
-///     BehaviourPtr, BasicBelief, BeliefPtr, update_activation_for_agent};
+///     *const dyn Behaviour, BasicBelief, BeliefPtr, update_activation_for_agent};
 /// use float_cmp::approx_eq;
 ///
 /// let mut agent = BasicAgent::new();
@@ -1045,9 +1053,9 @@ impl Agent for BasicAgent {
 /// let f2 = BasicAgent::new();
 /// let f2_ptr: AgentPtr = f2.into();
 /// let b1 = BasicBehaviour::new("b1".to_string());
-/// let b1_ptr: BehaviourPtr = b1.into();
+/// let b1_ptr: *const dyn Behaviour = b1.into();
 /// let b2 = BasicBehaviour::new("b2".to_string());
-/// let b2_ptr: BehaviourPtr = b2.into();
+/// let b2_ptr: *const dyn Behaviour = b2.into();
 ///
 /// f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
 /// f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
@@ -1117,7 +1125,7 @@ pub fn update_activation_for_agent(
     time: SimTime,
     belief: &BeliefPtr,
     beliefs: &[BeliefPtr],
-    actions_of_friends: &HashMap<BehaviourPtr, f64>,
+    actions_of_friends: &HashMap<*const dyn Behaviour, f64>,
 ) -> Result<(), UpdateActivationError> {
     let delta = agent.borrow().get_delta(belief);
     match delta {
@@ -1600,19 +1608,19 @@ mod tests {
     #[test]
     fn get_action_when_exists() {
         let mut a = BasicAgent::new();
-        let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let mut actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = b.into();
-        actions.insert(2, b_ptr.clone());
+        let b_ptr: *const dyn Behaviour = &b;
+        actions.insert(2, b_ptr);
         a.actions = actions;
 
-        assert_eq!(a.get_action(2).unwrap(), &b_ptr);
+        assert_eq!(a.get_action(2).unwrap() as *const u8, b_ptr as *const u8);
     }
 
     #[test]
     fn get_action_when_not_exists() {
         let mut a = BasicAgent::new();
-        let actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         a.actions = actions;
 
         assert_eq!(a.get_action(2), None);
@@ -1621,10 +1629,10 @@ mod tests {
     #[test]
     fn get_actions_when_exists() {
         let mut a = BasicAgent::new();
-        let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let mut actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = b.into();
-        actions.insert(2, b_ptr.clone());
+        let b_ptr: *const dyn Behaviour = &b;
+        actions.insert(2, b_ptr);
         a.actions = actions;
 
         let actions_obs = a.get_actions();
@@ -1636,7 +1644,7 @@ mod tests {
     #[test]
     fn get_actions_when_not_exists() {
         let mut a = BasicAgent::new();
-        let actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         a.actions = actions;
 
         let actions_obs = a.get_actions();
@@ -1647,26 +1655,26 @@ mod tests {
     #[test]
     fn set_action_when_exists() {
         let mut a = BasicAgent::new();
-        let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let mut actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = b.into();
-        actions.insert(2, b_ptr.clone());
+        let b_ptr: *const dyn Behaviour = &b;
+        actions.insert(2, b_ptr);
         a.actions = actions;
 
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        a.set_action(2, Some(b2_ptr.clone()));
+        a.set_action(2, Some(b2_ptr));
         assert_eq!(a.actions.get(&2).unwrap(), &b2_ptr);
     }
 
     #[test]
     fn set_action_when_exists_delete() {
         let mut a = BasicAgent::new();
-        let mut actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let mut actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         let b = BasicBehaviour::new("b".to_string());
-        let b_ptr: BehaviourPtr = b.into();
-        actions.insert(2, b_ptr.clone());
+        let b_ptr: *const dyn Behaviour = &b;
+        actions.insert(2, b_ptr);
         a.actions = actions;
 
         a.set_action(2, None);
@@ -1676,20 +1684,20 @@ mod tests {
     #[test]
     fn set_action_when_not_exists() {
         let mut a = BasicAgent::new();
-        let actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         a.actions = actions;
 
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        a.set_action(2, Some(b2_ptr.clone()));
+        a.set_action(2, Some(b2_ptr));
         assert_eq!(a.actions.get(&2).unwrap(), &b2_ptr);
     }
 
     #[test]
     fn set_action_when_not_exists_delete() {
         let mut a = BasicAgent::new();
-        let actions: HashMap<SimTime, BehaviourPtr> = HashMap::new();
+        let actions: HashMap<SimTime, *const dyn Behaviour> = HashMap::new();
         a.actions = actions;
 
         a.set_action(2, None);
@@ -2028,12 +2036,12 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = b1.into();
+        let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
@@ -2069,22 +2077,22 @@ mod tests {
         let f2_ptr: AgentPtr = f2.into();
 
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = b1.into();
+        let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
         belief_ptr
             .borrow_mut()
-            .set_perception(b1_ptr.clone(), Some(0.2))
+            .set_perception(b1_ptr, Some(0.2))
             .unwrap();
         belief_ptr
             .borrow_mut()
-            .set_perception(b2_ptr.clone(), Some(0.3))
+            .set_perception(b2_ptr, Some(0.3))
             .unwrap();
 
         {
@@ -2115,22 +2123,22 @@ mod tests {
         let f2_ptr: AgentPtr = f2.into();
 
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = b1.into();
+        let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
         belief_ptr
             .borrow_mut()
-            .set_perception(b1_ptr.clone(), Some(0.2))
+            .set_perception(b1_ptr, Some(0.2))
             .unwrap();
         belief_ptr
             .borrow_mut()
-            .set_perception(b2_ptr.clone(), Some(0.3))
+            .set_perception(b2_ptr, Some(0.3))
             .unwrap();
 
         {
@@ -2189,22 +2197,22 @@ mod tests {
         let f2_ptr: AgentPtr = f2.into();
 
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = b1.into();
+        let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
         belief_ptr
             .borrow_mut()
-            .set_perception(b1_ptr.clone(), Some(-0.2))
+            .set_perception(b1_ptr, Some(-0.2))
             .unwrap();
         belief_ptr
             .borrow_mut()
-            .set_perception(b2_ptr.clone(), Some(-0.3))
+            .set_perception(b2_ptr, Some(-0.3))
             .unwrap();
 
         {
@@ -2318,22 +2326,22 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = b1.into();
+        let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
         belief_ptr
             .borrow_mut()
-            .set_perception(b1_ptr.clone(), Some(0.2))
+            .set_perception(b1_ptr, Some(0.2))
             .unwrap();
         belief_ptr
             .borrow_mut()
-            .set_perception(b2_ptr.clone(), Some(0.3))
+            .set_perception(b2_ptr, Some(0.3))
             .unwrap();
 
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
@@ -2397,22 +2405,22 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = b1.into();
+        let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
         belief_ptr
             .borrow_mut()
-            .set_perception(b1_ptr.clone(), Some(0.2))
+            .set_perception(b1_ptr, Some(0.2))
             .unwrap();
         belief_ptr
             .borrow_mut()
-            .set_perception(b2_ptr.clone(), Some(0.3))
+            .set_perception(b2_ptr, Some(0.3))
             .unwrap();
 
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
@@ -2474,22 +2482,22 @@ mod tests {
         let f2 = BasicAgent::new();
         let f2_ptr: AgentPtr = f2.into();
         let b1 = BasicBehaviour::new("b1".to_string());
-        let b1_ptr: BehaviourPtr = b1.into();
+        let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
-        let b2_ptr: BehaviourPtr = b2.into();
+        let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr.clone()));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr.clone()));
+        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
+        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: BeliefPtr = belief.into();
         belief_ptr
             .borrow_mut()
-            .set_perception(b1_ptr.clone(), Some(0.2))
+            .set_perception(b1_ptr, Some(0.2))
             .unwrap();
         belief_ptr
             .borrow_mut()
-            .set_perception(b2_ptr.clone(), Some(0.3))
+            .set_perception(b2_ptr, Some(0.3))
             .unwrap();
 
         let mut friends: HashMap<AgentPtr, f64> = HashMap::new();

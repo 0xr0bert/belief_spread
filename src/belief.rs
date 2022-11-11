@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{errors::OutOfRangeError, BehaviourPtr, Named, UUIDd};
+use crate::{errors::OutOfRangeError, Behaviour, Named, UUIDd};
 use anyhow::Result;
 use by_address::ByAddress;
 use uuid::Uuid;
@@ -58,7 +58,7 @@ pub trait Belief: Named + UUIDd {
     ///
     /// # Returns
     /// The value, if found.
-    fn get_perception(&self, behaviour: &BehaviourPtr) -> Option<f64>;
+    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64>;
 
     /// Sets the perception.
     ///
@@ -70,7 +70,7 @@ pub trait Belief: Named + UUIDd {
     /// This is a value between -1 and +1.
     ///
     /// # Arguments
-    /// - `behaviour`: The [BehaviourPtr].
+    /// - `behaviour`: The [*const dyn Behaviour].
     /// - `perception`: The new perception.
     ///
     /// # Returns
@@ -78,7 +78,7 @@ pub trait Belief: Named + UUIDd {
     /// [OutOfRangeError], if the perception is not in range [-1, +1].
     fn set_perception(
         &mut self,
-        behaviour: BehaviourPtr,
+        behaviour: *const dyn Behaviour,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -126,7 +126,7 @@ pub trait Belief: Named + UUIDd {
 pub struct BasicBelief {
     name: String,
     uuid: Uuid,
-    perception: HashMap<BehaviourPtr, f64>,
+    perception: HashMap<*const dyn Behaviour, f64>,
     relationship: HashMap<BeliefPtr, f64>,
 }
 
@@ -204,16 +204,16 @@ impl Belief for BasicBelief {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, BehaviourPtr};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, *const dyn Behaviour};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let behaviour = BasicBehaviour::new("Behaviour 1".to_string());
-    /// let beh_ptr: BehaviourPtr = behaviour.into();
+    /// let beh_ptr: *const dyn Behaviour = behaviour.into();
     /// b.set_perception(beh_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     /// ```
-    fn get_perception(&self, behaviour: &BehaviourPtr) -> Option<f64> {
-        self.perception.get(behaviour).cloned()
+    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64> {
+        self.perception.get(&behaviour).cloned()
     }
 
     /// Sets the perception.
@@ -226,7 +226,7 @@ impl Belief for BasicBelief {
     /// This is a value between -1 and +1.
     ///
     /// # Arguments
-    /// - `behaviour`: The [BehaviourPtr].
+    /// - `behaviour`: The [*const dyn Behaviour].
     /// - `perception`: The new perception.
     ///
     /// # Returns
@@ -235,17 +235,17 @@ impl Belief for BasicBelief {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, BehaviourPtr};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, *const dyn Behaviour};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let behaviour = BasicBehaviour::new("Behaviour 1".to_string());
-    /// let beh_ptr: BehaviourPtr = behaviour.into();
+    /// let beh_ptr: *const dyn Behaviour = behaviour.into();
     /// b.set_perception(beh_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     /// ```
     fn set_perception(
         &mut self,
-        behaviour: BehaviourPtr,
+        behaviour: *const dyn Behaviour,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match perception {
@@ -520,36 +520,36 @@ mod tests {
     fn set_when_valid_and_get_perception_when_exists() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: BehaviourPtr = beh.into();
-        assert!(b.set_perception(beh_ptr.clone(), Some(0.1)).is_ok());
-        assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
+        let beh_ptr: *const dyn Behaviour = &beh;
+        assert!(b.set_perception(beh_ptr, Some(0.1)).is_ok());
+        assert_eq!(b.get_perception(beh_ptr).unwrap(), 0.1);
     }
 
     #[test]
     fn get_perception_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: BehaviourPtr = beh.into();
-        assert_eq!(b.get_perception(&beh_ptr), None);
+        let beh_ptr: *const dyn Behaviour = &beh;
+        assert_eq!(b.get_perception(beh_ptr), None);
     }
 
     #[test]
     fn set_when_valid_delete_and_get_perception_when_not_exists() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: BehaviourPtr = beh.into();
-        assert!(b.set_perception(beh_ptr.clone(), Some(0.1)).is_ok());
-        assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
-        assert!(b.set_perception(beh_ptr.clone(), None).is_ok());
-        assert_eq!(b.get_perception(&beh_ptr), None);
+        let beh_ptr: *const dyn Behaviour = &beh;
+        assert!(b.set_perception(beh_ptr, Some(0.1)).is_ok());
+        assert_eq!(b.get_perception(beh_ptr).unwrap(), 0.1);
+        assert!(b.set_perception(beh_ptr, None).is_ok());
+        assert_eq!(b.get_perception(beh_ptr), None);
     }
 
     #[test]
     fn set_perception_when_too_low() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: BehaviourPtr = beh.into();
-        let res = b.set_perception(beh_ptr.clone(), Some(-1.1));
+        let beh_ptr: *const dyn Behaviour = &beh;
+        let res = b.set_perception(beh_ptr, Some(-1.1));
         let expected_error = OutOfRangeError::TooLow {
             found: -1.1,
             min: -1.0,
@@ -562,8 +562,8 @@ mod tests {
     fn set_perception_when_too_high() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: BehaviourPtr = beh.into();
-        let res = b.set_perception(beh_ptr.clone(), Some(1.1));
+        let beh_ptr: *const dyn Behaviour = &beh;
+        let res = b.set_perception(beh_ptr, Some(1.1));
         let expected_error = OutOfRangeError::TooHigh {
             found: 1.1,
             min: -1.0,

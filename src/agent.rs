@@ -253,8 +253,10 @@ pub trait Agent: UUIDd {
     /// holds.
     ///
     /// # Arguments
-    /// - `time`: The time as [SimTime].
     /// - `belief`: The [BeliefPtr].
+    /// - `actions_of_friends`: The actions of friends at a given time. This is
+    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     that behaviour.
     ///
     /// # Returns
     /// The pressure
@@ -269,6 +271,9 @@ pub trait Agent: UUIDd {
     /// - `time`: The time as [SimTime].
     /// - `belief`: The [BeliefPtr].
     /// - `beliefs`: All the [BeliefPtr]s in existence.
+    /// - `actions_of_friends`: The actions of friends at a given time. This is
+    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     that behaviour.
     ///
     /// # Return
     /// - The change in activation
@@ -889,8 +894,10 @@ impl Agent for BasicAgent {
     /// holds.
     ///
     /// # Arguments
-    /// - `time`: The time as [SimTime].
     /// - `belief`: The [BeliefPtr].
+    /// - `actions_of_friends`: The actions of friends at a given time. This is
+    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     that behaviour.
     ///
     /// # Returns
     /// The pressure
@@ -919,7 +926,9 @@ impl Agent for BasicAgent {
     /// agent.set_friend_weight(f1.into(), Some(0.5));
     /// agent.set_friend_weight(f2.into(), Some(1.0));
     ///
-    /// assert_eq!(agent.pressure(2, &belief_ptr), 0.2);
+    /// let actions = agent.get_actions_of_friends(2);
+    ///
+    /// assert_eq!(agent.pressure(&belief_ptr, &actions), 0.2);
     /// ```
     fn pressure(&self, belief: &BeliefPtr, actions_of_friends: &HashMap<BehaviourPtr, f64>) -> f64 {
         match self.friends.len() {
@@ -943,6 +952,9 @@ impl Agent for BasicAgent {
     /// - `time`: The time as [SimTime].
     /// - `belief`: The [BeliefPtr].
     /// - `beliefs`: All the [BeliefPtr]s in existence.
+    /// - `actions_of_friends`: The actions of friends at a given time. This is
+    ///     a map from [BehaviourPtr] to the total weight of friends performing
+    ///     that behaviour.
     ///
     /// # Return
     /// - The change in activation
@@ -985,9 +997,11 @@ impl Agent for BasicAgent {
     /// belief_ptr.borrow_mut().set_relationship(belief2_ptr.clone(), Some(-0.75)).unwrap();
     /// // Contextualise is -0.125
     ///
+    /// let actions = agent.get_actions_of_friends(2);
+    ///
     /// assert!(approx_eq!(
     ///     f64,
-    ///     agent.activation_change(2, &belief_ptr, &beliefs),
+    ///     agent.activation_change(2, &belief_ptr, &beliefs, &actions),
     ///     0.0875,
     ///     ulps = 2
     /// ))
@@ -1011,6 +1025,9 @@ impl Agent for BasicAgent {
 /// - `time`: The time as [SimTime].
 /// - `belief`: The [BeliefPtr].
 /// - `beliefs`: All the [BeliefPtr]s in existence.
+/// - `actions_of_friends`: The actions of friends at time - 1. This is
+///     a map from [BehaviourPtr] to the total weight of friends performing
+///     that behaviour.
 ///
 /// # Return
 /// A [Result] with nothing if [Ok], or an [Err] containing
@@ -1076,9 +1093,11 @@ impl Agent for BasicAgent {
 /// // activation_change is 0.10625
 /// agent.set_delta(belief_ptr.clone(), Some(1.1));
 ///
+/// let actions = agent.get_actions_of_friends(2);
+///
 /// let agent_ptr: AgentPtr = agent.into();
 ///
-/// update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
+/// update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs, &actions).unwrap();
 ///
 /// assert!(approx_eq!(
 ///     f64,

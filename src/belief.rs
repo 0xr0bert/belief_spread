@@ -1,12 +1,48 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fmt::Debug,
     hash::{Hash, Hasher},
+    rc::Rc,
 };
 
-use crate::{errors::OutOfRangeError, Behaviour, Named, UUIDd};
+use crate::{errors::OutOfRangeError, BehaviourPtr, Named, UUIDd};
 use anyhow::Result;
+use by_address::ByAddress;
 use uuid::Uuid;
+
+/// A [Rc] [RefCell] pointer to a [Belief] that is compared by address;
+pub type BeliefPtr = ByAddress<Rc<RefCell<dyn Belief>>>;
+
+impl From<BasicBelief> for BeliefPtr {
+    /// Convert from a [BasicBelief] into a [BeliefPtr].
+    ///
+    /// This consumes the [BasicBelief].
+    ///
+    /// # Arguments
+    /// - `b`: The [BasicBelief] to convert.
+    ///
+    /// # Returns
+    /// The [BeliefPtr].
+    ///
+    /// # Examples
+    /// ```
+    /// use belief_spread::{BasicBelief, BeliefPtr};
+    ///
+    /// let b = BasicBelief::new("Belief 1".to_string());
+    /// let b_ptr = BeliefPtr::from(b);
+    /// ```
+    ///
+    /// ```
+    /// use belief_spread::{BasicBelief, BeliefPtr};
+    ///
+    /// let b = BasicBelief::new("Belief 1".to_string());
+    /// let b_ptr: BeliefPtr = b.into();
+    /// ```
+    fn from(b: BasicBelief) -> Self {
+        ByAddress(Rc::new(RefCell::new(b)))
+    }
+}
 
 /// A Belief.
 pub trait Belief: Named + UUIDd {
@@ -22,7 +58,7 @@ pub trait Belief: Named + UUIDd {
     ///
     /// # Returns
     /// The value, if found.
-    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64>;
+    fn get_perception(&self, behaviour: &BehaviourPtr) -> Option<f64>;
 
     /// Sets the perception.
     ///
@@ -34,7 +70,7 @@ pub trait Belief: Named + UUIDd {
     /// This is a value between -1 and +1.
     ///
     /// # Arguments
-    /// - `behaviour`: The [*const dyn Behaviour].
+    /// - `behaviour`: The [BehaviourPtr].
     /// - `perception`: The new perception.
     ///
     /// # Returns
@@ -42,7 +78,7 @@ pub trait Belief: Named + UUIDd {
     /// [OutOfRangeError], if the perception is not in range [-1, +1].
     fn set_perception(
         &mut self,
-        behaviour: *const dyn Behaviour,
+        behaviour: BehaviourPtr,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -59,7 +95,7 @@ pub trait Belief: Named + UUIDd {
     ///
     /// # Returns
     /// The value, if found.
-    fn get_relationship(&self, belief: *const dyn Belief) -> Option<f64>;
+    fn get_relationship(&self, belief: &BeliefPtr) -> Option<f64>;
 
     /// Sets the relationship.
     ///
@@ -80,7 +116,7 @@ pub trait Belief: Named + UUIDd {
     /// [OutOfRangeError], if the relationship is not in range [-1, +1].
     fn set_relationship(
         &mut self,
-        belief: *const dyn Belief,
+        belief: BeliefPtr,
         relationship: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 }
@@ -90,8 +126,8 @@ pub trait Belief: Named + UUIDd {
 pub struct BasicBelief {
     name: String,
     uuid: Uuid,
-    perception: HashMap<*const dyn Behaviour, f64>,
-    relationship: HashMap<*const dyn Belief, f64>,
+    perception: HashMap<BehaviourPtr, f64>,
+    relationship: HashMap<BeliefPtr, f64>,
 }
 
 impl Debug for BasicBelief {
@@ -168,16 +204,16 @@ impl Belief for BasicBelief {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, *const dyn Behaviour};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, BehaviourPtr};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let behaviour = BasicBehaviour::new("Behaviour 1".to_string());
-    /// let beh_ptr: *const dyn Behaviour = behaviour.into();
+    /// let beh_ptr: BehaviourPtr = behaviour.into();
     /// b.set_perception(beh_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     /// ```
-    fn get_perception(&self, behaviour: *const dyn Behaviour) -> Option<f64> {
-        self.perception.get(&behaviour).cloned()
+    fn get_perception(&self, behaviour: &BehaviourPtr) -> Option<f64> {
+        self.perception.get(behaviour).cloned()
     }
 
     /// Sets the perception.
@@ -190,7 +226,7 @@ impl Belief for BasicBelief {
     /// This is a value between -1 and +1.
     ///
     /// # Arguments
-    /// - `behaviour`: The [*const dyn Behaviour].
+    /// - `behaviour`: The [BehaviourPtr].
     /// - `perception`: The new perception.
     ///
     /// # Returns
@@ -199,17 +235,17 @@ impl Belief for BasicBelief {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, *const dyn Behaviour};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, BehaviourPtr};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let behaviour = BasicBehaviour::new("Behaviour 1".to_string());
-    /// let beh_ptr: *const dyn Behaviour = behaviour.into();
+    /// let beh_ptr: BehaviourPtr = behaviour.into();
     /// b.set_perception(beh_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     /// ```
     fn set_perception(
         &mut self,
-        behaviour: *const dyn Behaviour,
+        behaviour: BehaviourPtr,
         perception: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match perception {
@@ -251,16 +287,16 @@ impl Belief for BasicBelief {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, UUIDd, Named, *const dyn Belief};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, UUIDd, Named, BeliefPtr};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let b2 = BasicBelief::new("Belief 2". to_string());
-    /// let b2_ptr: *const dyn Belief = b2.into();
+    /// let b2_ptr: BeliefPtr = b2.into();
     /// b.set_relationship(b2_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_relationship(&b2_ptr).unwrap(), 0.1);
     /// ```
-    fn get_relationship(&self, belief: *const dyn Belief) -> Option<f64> {
-        self.relationship.get(&belief).cloned()
+    fn get_relationship(&self, belief: &BeliefPtr) -> Option<f64> {
+        self.relationship.get(belief).cloned()
     }
 
     /// Sets the relationship.
@@ -284,17 +320,17 @@ impl Belief for BasicBelief {
     /// # Examples
     ///
     /// ```
-    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, UUIDd, Named, *const dyn Belief};
+    /// use belief_spread::{BasicBelief, BasicBehaviour, Belief, UUIDd, Named, BeliefPtr};
     ///
     /// let mut b = BasicBelief::new("Belief 1".to_string());
     /// let b2 = BasicBelief::new("Belief 2". to_string());
-    /// let b2_ptr: *const dyn Belief = b2.into();
+    /// let b2_ptr: BeliefPtr = b2.into();
     /// b.set_relationship(b2_ptr.clone(), Some(0.1));
     /// assert_eq!(b.get_relationship(&b2_ptr).unwrap(), 0.1);
     /// ```
     fn set_relationship(
         &mut self,
-        belief: *const dyn Belief,
+        belief: BeliefPtr,
         relationship: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match relationship {
@@ -419,104 +455,101 @@ mod tests {
     #[test]
     fn set_when_valid_and_get_relationship_when_exists() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: *const dyn Belief = &b;
-        unsafe {
-            assert!((*(b_ptr as *mut dyn Belief))
-                .set_relationship(b_ptr, Some(0.2))
-                .is_ok());
-            assert_eq!((*b_ptr).get_relationship(b_ptr).unwrap(), 0.2);
-        }
+        let b_ptr: BeliefPtr = b.into();
+        assert!(b_ptr
+            .borrow_mut()
+            .set_relationship(b_ptr.clone(), Some(0.2))
+            .is_ok());
+        assert_eq!(b_ptr.borrow().get_relationship(&b_ptr).unwrap(), 0.2);
     }
 
     #[test]
     fn get_relationship_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: *const dyn Belief = &b;
-        unsafe {
-            assert_eq!((*b_ptr).get_relationship(b_ptr), None);
-        }
+        let b_ptr: BeliefPtr = b.into();
+        assert_eq!(b_ptr.borrow().get_relationship(&b_ptr.clone()), None);
     }
 
     #[test]
     fn set_delete_when_valid_and_get_relationship_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: *const dyn Belief = &b;
-        unsafe {
-            assert!((*(b_ptr as *mut dyn Belief))
-                .set_relationship(b_ptr, Some(0.2))
-                .is_ok());
-            assert_eq!((*b_ptr).get_relationship(b_ptr).unwrap(), 0.2);
-            assert!((*(b_ptr as *mut dyn Belief))
-                .set_relationship(b_ptr, None)
-                .is_ok());
-            assert_eq!((*b_ptr).get_relationship(b_ptr), None);
-        }
+        let b_ptr: BeliefPtr = b.into();
+        assert!(b_ptr
+            .borrow_mut()
+            .set_relationship(b_ptr.clone(), Some(0.2))
+            .is_ok());
+        assert_eq!(b_ptr.borrow().get_relationship(&b_ptr).unwrap(), 0.2);
+        assert!(b_ptr
+            .borrow_mut()
+            .set_relationship(b_ptr.clone(), None)
+            .is_ok());
+        assert_eq!(b_ptr.borrow().get_relationship(&b_ptr), None);
     }
 
     #[test]
     fn set_relationship_when_too_low() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: *const dyn Belief = &b;
-        unsafe {
-            let res = (*(b_ptr as *mut dyn Belief)).set_relationship(b_ptr, Some(-1.1));
-            let expected_error = OutOfRangeError::TooLow {
-                found: -1.1,
-                min: -1.0,
-                max: 1.0,
-            };
-            assert_eq!(res.unwrap_err(), expected_error);
-        }
+        let b_ptr: BeliefPtr = b.into();
+        let res = b_ptr
+            .borrow_mut()
+            .set_relationship(b_ptr.clone(), Some(-1.1));
+        let expected_error = OutOfRangeError::TooLow {
+            found: -1.1,
+            min: -1.0,
+            max: 1.0,
+        };
+        assert_eq!(res.unwrap_err(), expected_error);
     }
 
     #[test]
     fn set_relationship_when_too_high() {
         let b = BasicBelief::new("belief".to_string());
-        let b_ptr: *const dyn Belief = &b;
-        unsafe {
-            let res = (*(b_ptr as *mut dyn Belief)).set_relationship(b_ptr, Some(1.1));
-            let expected_error = OutOfRangeError::TooHigh {
-                found: 1.1,
-                min: -1.0,
-                max: 1.0,
-            };
-            assert_eq!(res.unwrap_err(), expected_error);
-        }
+        let b_ptr: BeliefPtr = b.into();
+        let res = b_ptr
+            .borrow_mut()
+            .set_relationship(b_ptr.clone(), Some(1.1));
+        let expected_error = OutOfRangeError::TooHigh {
+            found: 1.1,
+            min: -1.0,
+            max: 1.0,
+        };
+        assert_eq!(res.unwrap_err(), expected_error);
     }
 
     #[test]
     fn set_when_valid_and_get_perception_when_exists() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: *const dyn Behaviour = &beh;
-        assert!(b.set_perception(beh_ptr, Some(0.1)).is_ok());
-        assert_eq!(b.get_perception(beh_ptr).unwrap(), 0.1);
+        let beh_ptr: BehaviourPtr = beh.into();
+        assert!(b.set_perception(beh_ptr.clone(), Some(0.1)).is_ok());
+        assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
     }
 
     #[test]
     fn get_perception_when_not_exists() {
         let b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: *const dyn Behaviour = &beh;
-        assert_eq!(b.get_perception(beh_ptr), None);
+        let beh_ptr: BehaviourPtr = beh.into();
+        assert_eq!(b.get_perception(&beh_ptr), None);
     }
 
     #[test]
     fn set_when_valid_delete_and_get_perception_when_not_exists() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: *const dyn Behaviour = &beh;
-        assert!(b.set_perception(beh_ptr, Some(0.1)).is_ok());
-        assert_eq!(b.get_perception(beh_ptr).unwrap(), 0.1);
-        assert!(b.set_perception(beh_ptr, None).is_ok());
-        assert_eq!(b.get_perception(beh_ptr), None);
+        let beh_ptr: BehaviourPtr = beh.into();
+        assert!(b.set_perception(beh_ptr.clone(), Some(0.1)).is_ok());
+        assert_eq!(b.get_perception(&beh_ptr).unwrap(), 0.1);
+        assert!(b.set_perception(beh_ptr.clone(), None).is_ok());
+        assert_eq!(b.get_perception(&beh_ptr), None);
     }
 
     #[test]
     fn set_perception_when_too_low() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: *const dyn Behaviour = &beh;
-        let res = b.set_perception(beh_ptr, Some(-1.1));
+        let beh_ptr: BehaviourPtr = beh.into();
+        let res = b.set_perception(beh_ptr.clone(), Some(-1.1));
         let expected_error = OutOfRangeError::TooLow {
             found: -1.1,
             min: -1.0,
@@ -529,8 +562,8 @@ mod tests {
     fn set_perception_when_too_high() {
         let mut b = BasicBelief::new("belief".to_string());
         let beh = BasicBehaviour::new("behaviour".to_string());
-        let beh_ptr: *const dyn Behaviour = &beh;
-        let res = b.set_perception(beh_ptr, Some(1.1));
+        let beh_ptr: BehaviourPtr = beh.into();
+        let res = b.set_perception(beh_ptr.clone(), Some(1.1));
         let expected_error = OutOfRangeError::TooHigh {
             found: 1.1,
             min: -1.0,
@@ -580,5 +613,19 @@ mod tests {
         b1.hash(&mut hasher1);
         b2.hash(&mut hasher2);
         assert_ne!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn test_from() {
+        let b = BasicBelief::new("b1".to_string());
+        let b_ptr: BeliefPtr = BeliefPtr::from(b);
+        assert_eq!(b_ptr.borrow().name(), "b1");
+    }
+
+    #[test]
+    fn test_into() {
+        let b = BasicBelief::new("b1".to_string());
+        let b_ptr: BeliefPtr = b.into();
+        assert_eq!(b_ptr.borrow().name(), "b1");
     }
 }

@@ -1,47 +1,13 @@
 #![allow(clippy::missing_safety_doc)]
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use anyhow::Result;
-use by_address::ByAddress;
 use uuid::Uuid;
 
 use crate::{
     errors::{OutOfRangeError, UpdateActivationError},
     Behaviour, Belief, SimTime, UUIDd,
 };
-
-/// A [Rc] [RefCell] pointer to an [Agent] compared by its address.
-pub type AgentPtr = ByAddress<Rc<RefCell<dyn Agent>>>;
-
-impl From<BasicAgent> for AgentPtr {
-    /// Convert from a [BasicAgent] into a [AgentPtr].
-    ///
-    /// This consumes the [BasicAgent].
-    ///
-    /// # Arguments
-    /// - `a`: The [BasicAgent] to convert.
-    ///
-    /// # Returns
-    /// The [AgentPtr].
-    ///
-    /// # Examples
-    /// ```
-    /// use belief_spread::{BasicAgent, AgentPtr};
-    ///
-    /// let a = BasicAgent::new();
-    /// let a_ptr = AgentPtr::from(a);
-    /// ```
-    ///
-    /// ```
-    /// use belief_spread::{BasicAgent, AgentPtr};
-    ///
-    /// let a = BasicAgent::new();
-    /// let a_ptr: AgentPtr = a.into();
-    /// ```
-    fn from(a: BasicAgent) -> Self {
-        ByAddress(Rc::new(RefCell::new(a)))
-    }
-}
 
 /// An [Agent] which may exist in the model.
 pub trait Agent: UUIDd {
@@ -98,7 +64,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The friends with their weight of connection.
-    fn get_friends(&self) -> &HashMap<AgentPtr, f64>;
+    fn get_friends(&self) -> &HashMap<*const dyn Agent, f64>;
 
     /// Gets the weight of a friend of the [Agent].
     ///
@@ -111,7 +77,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The weight, or [None] if they are not friends.
-    fn get_friend_weight(&self, friend: &AgentPtr) -> Option<f64>;
+    fn get_friend_weight(&self, friend: *const dyn Agent) -> Option<f64>;
 
     /// Set the weight of a friend of the [Agent].
     ///
@@ -133,7 +99,7 @@ pub trait Agent: UUIDd {
     /// [OutOfRangeError], if the weight is not in the range [0, +1].
     fn set_friend_weight(
         &mut self,
-        friend: AgentPtr,
+        friend: *const dyn Agent,
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError>;
 
@@ -259,7 +225,7 @@ pub trait Agent: UUIDd {
         beliefs: *const [*const dyn Belief],
     ) -> f64;
 
-    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<*const dyn Behaviour, f64>;
+    unsafe fn get_actions_of_friends(&self, t: SimTime) -> HashMap<*const dyn Behaviour, f64>;
 
     /// Gets the pressure the [Agent] feels to adopt a [*const dyn Belief] given the
     /// actions of their friends.
@@ -309,7 +275,7 @@ pub trait Agent: UUIDd {
 pub struct BasicAgent {
     uuid: Uuid,
     activations: HashMap<SimTime, HashMap<*const dyn Belief, f64>>,
-    friends: HashMap<AgentPtr, f64>,
+    friends: HashMap<*const dyn Agent, f64>,
     actions: HashMap<SimTime, *const dyn Behaviour>,
     deltas: HashMap<*const dyn Belief, f64>,
 }
@@ -525,17 +491,17 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, AgentPtr, UUIDd};
+    /// use belief_spread::{BasicAgent, Agent, *const dyn Agent, UUIDd};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let a2 = BasicAgent::new();
-    /// let a2_ptr: AgentPtr = a2.into();
-    /// a1.set_friend_weight(a2_ptr.clone(), Some(0.1)).unwrap();
+    /// let a2_ptr: *const dyn Agent = &a2;
+    /// a1.set_friend_weight(a2_ptr, Some(0.1)).unwrap();
     /// let friends = a1.get_friends();
     /// assert_eq!(friends.len(), 1);
     /// assert_eq!(*friends.get(&a2_ptr).unwrap(), 0.1);
     /// ```
-    fn get_friends(&self) -> &HashMap<AgentPtr, f64> {
+    fn get_friends(&self) -> &HashMap<*const dyn Agent, f64> {
         &self.friends
     }
 
@@ -553,16 +519,16 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, UUIDd, AgentPtr};
+    /// use belief_spread::{BasicAgent, Agent, UUIDd, *const dyn Agent};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let a2 = BasicAgent::new();
-    /// let a2_ptr: AgentPtr = a2.into();
-    /// a1.set_friend_weight(a2_ptr.clone(), Some(0.1)).unwrap();
+    /// let a2_ptr: *const dyn Agent = &a2;
+    /// a1.set_friend_weight(a2_ptr, Some(0.1)).unwrap();
     /// assert_eq!(a1.get_friend_weight(&a2_ptr).unwrap(), 0.1)
     /// ```
-    fn get_friend_weight(&self, friend: &AgentPtr) -> Option<f64> {
-        self.friends.get(friend).cloned()
+    fn get_friend_weight(&self, friend: *const dyn Agent) -> Option<f64> {
+        self.friends.get(&friend).cloned()
     }
 
     /// Set the weight of a friend of the [Agent].
@@ -586,17 +552,17 @@ impl Agent for BasicAgent {
     ///
     /// # Examples
     /// ```
-    /// use belief_spread::{BasicAgent, Agent, UUIDd, AgentPtr};
+    /// use belief_spread::{BasicAgent, Agent, UUIDd, *const dyn Agent};
     ///
     /// let mut a1 = BasicAgent::new();
     /// let a2 = BasicAgent::new();
-    /// let a2_ptr: AgentPtr = a2.into();
-    /// a1.set_friend_weight(a2_ptr.clone(), Some(0.1)).unwrap();
+    /// let a2_ptr: *const dyn Agent = &a2;
+    /// a1.set_friend_weight(a2_ptr, Some(0.1)).unwrap();
     /// assert_eq!(a1.get_friend_weight(&a2_ptr).unwrap(), 0.1)
     /// ```
     fn set_friend_weight(
         &mut self,
-        friend: AgentPtr,
+        friend: *const dyn Agent,
         weight: Option<f64>,
     ) -> Result<(), OutOfRangeError> {
         match weight {
@@ -910,10 +876,10 @@ impl Agent for BasicAgent {
         }
     }
 
-    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<*const dyn Behaviour, f64> {
+    unsafe fn get_actions_of_friends(&self, t: SimTime) -> HashMap<*const dyn Behaviour, f64> {
         self.friends
             .iter()
-            .filter_map(|(a, &w)| a.borrow().get_action(t).map(|action| (action, w)))
+            .filter_map(|(a, &w)| (**a).get_action(t).map(|action| (action, w)))
             .fold(HashMap::new(), |mut map, (beh, w)| {
                 *map.entry(beh).or_insert(0.0) += w;
                 map
@@ -956,8 +922,8 @@ impl Agent for BasicAgent {
     /// belief_ptr.borrow_mut().set_perception(b1_ptr, Some(0.2)).unwrap();
     /// belief_ptr.borrow_mut().set_perception(b2_ptr, Some(0.3)).unwrap();
     ///
-    /// agent.set_friend_weight(f1.into(), Some(0.5));
-    /// agent.set_friend_weight(f2.into(), Some(1.0));
+    /// agent.set_friend_weight(&f1, Some(0.5));
+    /// agent.set_friend_weight(&f2, Some(1.0));
     ///
     /// let actions = agent.get_actions_of_friends(2);
     ///
@@ -1018,8 +984,8 @@ impl Agent for BasicAgent {
     /// belief_ptr.borrow_mut().set_perception(b1_ptr, Some(0.2)).unwrap();
     /// belief_ptr.borrow_mut().set_perception(b2_ptr, Some(0.3)).unwrap();
     ///
-    /// agent.set_friend_weight(f1.into(), Some(0.5));
-    /// agent.set_friend_weight(f2.into(), Some(1.0));
+    /// agent.set_friend_weight(&f1, Some(0.5));
+    /// agent.set_friend_weight(&f2, Some(1.0));
     /// // Pressure is 0.2
     ///
     /// let belief2 = BasicBelief::new("b2".to_string());
@@ -1072,15 +1038,15 @@ impl Agent for BasicAgent {
 ///
 /// # Examples
 /// ```
-/// use belief_spread::{BasicAgent, Agent, BasicBehaviour, AgentPtr,
+/// use belief_spread::{BasicAgent, Agent, BasicBehaviour, *const dyn Agent,
 ///     *const dyn Behaviour, BasicBelief, *const dyn Belief, update_activation_for_agent};
 /// use float_cmp::approx_eq;
 ///
 /// let mut agent = BasicAgent::new();
 /// let f1 = BasicAgent::new();
-/// let f1_ptr: AgentPtr = f1.into();
+/// let f1_ptr: *const dyn Agent = &f1;
 /// let f2 = BasicAgent::new();
-/// let f2_ptr: AgentPtr = f2.into();
+/// let f2_ptr: *const dyn Agent = &f2;
 /// let b1 = BasicBehaviour::new("b1".to_string());
 /// let b1_ptr: *const dyn Behaviour = &b1;
 /// let b2 = BasicBehaviour::new("b2".to_string());
@@ -1100,8 +1066,8 @@ impl Agent for BasicAgent {
 ///     .set_perception(b2_ptr, Some(0.3))
 ///     .unwrap();
 ///
-/// agent.set_friend_weight(f1_ptr.clone(), Some(0.5));
-/// agent.set_friend_weight(f2_ptr.clone(), Some(1.0));
+/// agent.set_friend_weight(f1_ptr, Some(0.5));
+/// agent.set_friend_weight(f2_ptr, Some(1.0));
 ///
 /// // Pressure is 0.2
 ///
@@ -1132,7 +1098,7 @@ impl Agent for BasicAgent {
 ///
 /// let actions = agent.get_actions_of_friends(2);
 ///
-/// let agent_ptr: AgentPtr = agent.into();
+/// let agent_ptr: *const dyn Agent = &agent;
 ///
 /// update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs, &actions).unwrap();
 ///
@@ -1150,19 +1116,19 @@ impl Agent for BasicAgent {
 /// ))
 /// ```
 pub unsafe fn update_activation_for_agent(
-    agent: &AgentPtr,
+    agent: *mut dyn Agent,
     time: SimTime,
     belief: *const dyn Belief,
     beliefs: *const [*const dyn Belief],
     actions_of_friends: &HashMap<*const dyn Behaviour, f64>,
 ) -> Result<(), UpdateActivationError> {
-    let delta = agent.borrow().get_delta(belief);
+    let delta = (*agent).get_delta(belief);
     match delta {
         None => Err(UpdateActivationError::GetDeltaNone {
             belief: *(*belief).uuid(),
         }),
         Some(d) => {
-            let activation = agent.borrow().get_activation(time - 1, belief);
+            let activation = (*agent).get_activation(time - 1, belief);
             match activation {
                 None => Err(UpdateActivationError::GetActivationNone {
                     time: time - 1,
@@ -1170,16 +1136,10 @@ pub unsafe fn update_activation_for_agent(
                 }),
                 Some(a) => {
                     let activation_change = {
-                        agent.borrow().activation_change(
-                            time - 1,
-                            belief,
-                            beliefs,
-                            actions_of_friends,
-                        )
+                        (*agent).activation_change(time - 1, belief, beliefs, actions_of_friends)
                     };
                     let new_activation = (-1.0_f64).max((1.0_f64).min(d * a + activation_change));
-                    agent
-                        .borrow_mut()
+                    (*agent)
                         .set_activation(time, belief, Some(new_activation))
                         .unwrap();
                     Ok(())
@@ -1190,11 +1150,11 @@ pub unsafe fn update_activation_for_agent(
 }
 
 pub unsafe fn update_activation_for_all_beliefs_for_agent(
-    agent: &AgentPtr,
+    agent: *mut dyn Agent,
     time: SimTime,
     beliefs: *const [*const dyn Belief],
 ) -> Result<(), UpdateActivationError> {
-    let actions_of_friends = agent.borrow().get_actions_of_friends(time);
+    let actions_of_friends = (*agent).get_actions_of_friends(time);
     for &belief in (*beliefs).iter() {
         update_activation_for_agent(agent, time, belief, beliefs, &actions_of_friends)?
     }
@@ -1454,7 +1414,7 @@ mod tests {
     #[test]
     fn get_friends_when_empty() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
         assert!(a.get_friends().is_empty())
     }
@@ -1463,9 +1423,9 @@ mod tests {
     fn get_friends_when_not_empty() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
-        friends.insert(a2_ptr.clone(), 0.3);
+        let a2_ptr: *const dyn Agent = &a2;
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        friends.insert(a2_ptr, 0.3);
         a.friends = friends;
         assert_eq!(a.get_friends().len(), 1);
         assert_eq!(*a.get_friends().get(&a2_ptr).unwrap(), 0.3);
@@ -1475,83 +1435,83 @@ mod tests {
     fn get_friend_weight_when_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
-        friends.insert(a2_ptr.clone(), 0.3);
+        let a2_ptr: *const dyn Agent = &a2;
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
+        friends.insert(a2_ptr, 0.3);
         a.friends = friends;
-        assert_eq!(a.get_friend_weight(&a2_ptr).unwrap(), 0.3);
+        assert_eq!(a.get_friend_weight(a2_ptr).unwrap(), 0.3);
     }
 
     #[test]
     fn get_friend_weight_when_not_exists() {
         let mut a = BasicAgent::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        let friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let a2_ptr: *const dyn Agent = &a2;
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
-        assert_eq!(a.get_friend_weight(&a2_ptr), None);
+        assert_eq!(a.get_friend_weight(a2_ptr), None);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_valid() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
 
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        a.set_friend_weight(a2_ptr.clone(), Some(0.5)).unwrap();
+        let a2_ptr: *const dyn Agent = &a2;
+        a.set_friend_weight(a2_ptr, Some(0.5)).unwrap();
         assert_eq!(*a.friends.get(&a2_ptr).unwrap(), 0.5);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_valid() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        friends.insert(a2_ptr.clone(), 0.2);
+        let a2_ptr: *const dyn Agent = &a2;
+        friends.insert(a2_ptr, 0.2);
         a.friends = friends;
 
-        a.set_friend_weight(a2_ptr.clone(), Some(0.5)).unwrap();
+        a.set_friend_weight(a2_ptr, Some(0.5)).unwrap();
         assert_eq!(*a.friends.get(&a2_ptr).unwrap(), 0.5);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_valid_delete() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        friends.insert(a2_ptr.clone(), 0.2);
+        let a2_ptr: *const dyn Agent = &a2;
+        friends.insert(a2_ptr, 0.2);
         a.friends = friends;
 
-        a.set_friend_weight(a2_ptr.clone(), None).unwrap();
+        a.set_friend_weight(a2_ptr, None).unwrap();
         assert_eq!(a.friends.get(&a2_ptr), None);
     }
 
     #[test]
     fn set_friend_weight_when_not_exists_and_valid_delete() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         a.friends = friends;
 
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        a.set_friend_weight(a2_ptr.clone(), None).unwrap();
+        let a2_ptr: *const dyn Agent = &a2;
+        a.set_friend_weight(a2_ptr, None).unwrap();
         assert_eq!(a.friends.get(&a2_ptr), None);
     }
 
     #[test]
     fn set_friend_weight_when_exists_and_too_low() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        friends.insert(a2_ptr.clone(), 0.2);
+        let a2_ptr: *const dyn Agent = &a2;
+        friends.insert(a2_ptr, 0.2);
         a.friends = friends;
 
-        let result = a.set_friend_weight(a2_ptr.clone(), Some(-0.1));
+        let result = a.set_friend_weight(a2_ptr, Some(-0.1));
 
         let expected_error = OutOfRangeError::TooLow {
             found: -0.1,
@@ -1567,12 +1527,12 @@ mod tests {
     #[test]
     fn set_friend_weight_when_not_exists_and_too_low() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
+        let a2_ptr: *const dyn Agent = &a2;
         a.friends = friends;
 
-        let result = a.set_friend_weight(a2_ptr.clone(), Some(-0.1));
+        let result = a.set_friend_weight(a2_ptr, Some(-0.1));
 
         let expected_error = OutOfRangeError::TooLow {
             found: -0.1,
@@ -1588,13 +1548,13 @@ mod tests {
     #[test]
     fn set_friend_weight_when_exists_and_too_high() {
         let mut a = BasicAgent::new();
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
-        friends.insert(a2_ptr.clone(), 0.2);
+        let a2_ptr: *const dyn Agent = &a2;
+        friends.insert(a2_ptr, 0.2);
         a.friends = friends;
 
-        let result = a.set_friend_weight(a2_ptr.clone(), Some(1.1));
+        let result = a.set_friend_weight(a2_ptr, Some(1.1));
 
         let expected_error = OutOfRangeError::TooHigh {
             found: 1.1,
@@ -1610,12 +1570,12 @@ mod tests {
     #[test]
     fn set_friend_weight_when_not_exists_and_too_high() {
         let mut a = BasicAgent::new();
-        let friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         let a2 = BasicAgent::new();
-        let a2_ptr: AgentPtr = a2.into();
+        let a2_ptr: *const dyn Agent = &a2;
         a.friends = friends;
 
-        let result = a.set_friend_weight(a2_ptr.clone(), Some(1.1));
+        let result = a.set_friend_weight(a2_ptr, Some(1.1));
 
         let expected_error = OutOfRangeError::TooHigh {
             found: 1.1,
@@ -2049,7 +2009,7 @@ mod tests {
         let mut agent = BasicAgent::new();
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
-        let friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let friends: HashMap<*const dyn Agent, f64> = HashMap::new();
         agent.friends = friends;
         unsafe {
             assert_eq!(
@@ -2062,33 +2022,29 @@ mod tests {
     #[test]
     fn pressure_when_friends_did_nothing() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = agent.into();
+        let agent_ptr: *const dyn Agent = &agent;
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
 
         {
-            let mut mut_agent = agent_ptr.borrow_mut();
-            mut_agent
-                .set_friend_weight(agent_ptr.clone(), Some(0.2))
-                .unwrap();
-            mut_agent
-                .set_friend_weight(f1_ptr.clone(), Some(0.5))
-                .unwrap();
-            mut_agent
-                .set_friend_weight(f2_ptr.clone(), Some(1.0))
-                .unwrap();
+            let mut_agent = agent_ptr as *mut dyn Agent;
+            unsafe {
+                (*mut_agent)
+                    .set_friend_weight(agent_ptr, Some(0.2))
+                    .unwrap();
+                (*mut_agent).set_friend_weight(f1_ptr, Some(0.5)).unwrap();
+                (*mut_agent).set_friend_weight(f2_ptr, Some(1.0)).unwrap();
+            }
         }
 
         unsafe {
             assert_eq!(
-                agent_ptr
-                    .borrow()
-                    .pressure(belief_ptr, &agent_ptr.borrow().get_actions_of_friends(2)),
+                (*agent_ptr).pressure(belief_ptr, &(*agent_ptr).get_actions_of_friends(2)),
                 0.0
             );
         }
@@ -2097,40 +2053,38 @@ mod tests {
     #[test]
     fn pressure_when_friends_did_something_but_perception_null() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = agent.into();
+        let agent_ptr: *const dyn Agent = &agent;
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
+        unsafe {
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b1_ptr));
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b2_ptr));
+        }
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
 
         {
-            let mut mut_agent = agent_ptr.borrow_mut();
-            mut_agent
-                .set_friend_weight(agent_ptr.clone(), Some(0.2))
-                .unwrap();
-            mut_agent
-                .set_friend_weight(f1_ptr.clone(), Some(0.5))
-                .unwrap();
-            mut_agent
-                .set_friend_weight(f2_ptr.clone(), Some(1.0))
-                .unwrap();
+            let mut_agent = agent_ptr as *mut dyn Agent;
+            unsafe {
+                (*mut_agent)
+                    .set_friend_weight(agent_ptr, Some(0.2))
+                    .unwrap();
+                (*mut_agent).set_friend_weight(f1_ptr, Some(0.5)).unwrap();
+                (*mut_agent).set_friend_weight(f2_ptr, Some(1.0)).unwrap();
+            }
         }
 
         unsafe {
             assert_eq!(
-                agent_ptr
-                    .borrow()
-                    .pressure(belief_ptr, &agent_ptr.borrow().get_actions_of_friends(2)),
+                (*agent_ptr).pressure(belief_ptr, &(*agent_ptr).get_actions_of_friends(2)),
                 0.0
             );
         }
@@ -2139,19 +2093,21 @@ mod tests {
     #[test]
     fn pressure_when_friends_did_something() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = agent.into();
+        let agent_ptr: *const dyn Agent = &agent;
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
 
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
+        unsafe {
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b1_ptr));
+            (*(f2_ptr as *mut dyn Agent)).set_action(2, Some(b2_ptr));
+        }
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
@@ -2165,19 +2121,13 @@ mod tests {
                 .unwrap();
 
             {
-                let mut mut_agent = agent_ptr.borrow_mut();
-                mut_agent
-                    .set_friend_weight(f1_ptr.clone(), Some(0.5))
-                    .unwrap();
-                mut_agent
-                    .set_friend_weight(f2_ptr.clone(), Some(1.0))
-                    .unwrap();
+                let mut_agent = agent_ptr as *mut dyn Agent;
+                (*mut_agent).set_friend_weight(f1_ptr, Some(0.5)).unwrap();
+                (*mut_agent).set_friend_weight(f2_ptr, Some(1.0)).unwrap();
             }
 
             assert_eq!(
-                agent_ptr
-                    .borrow()
-                    .pressure(belief_ptr, &agent_ptr.borrow().get_actions_of_friends(2)),
+                (*agent_ptr).pressure(belief_ptr, &(*agent_ptr).get_actions_of_friends(2)),
                 0.2
             );
         }
@@ -2186,19 +2136,21 @@ mod tests {
     #[test]
     fn activation_change_when_pressure_positive() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = agent.into();
+        let agent_ptr: *const dyn Agent = &agent;
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
 
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
+        unsafe {
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b1_ptr));
+            (*(f2_ptr as *mut dyn Agent)).set_action(2, Some(b2_ptr));
+        }
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
@@ -2212,13 +2164,11 @@ mod tests {
         }
 
         {
-            let mut mut_agent = agent_ptr.borrow_mut();
-            mut_agent
-                .set_friend_weight(f1_ptr.clone(), Some(0.5))
-                .unwrap();
-            mut_agent
-                .set_friend_weight(f2_ptr.clone(), Some(1.0))
-                .unwrap();
+            let mut_agent = agent_ptr as *mut dyn Agent;
+            unsafe {
+                (*mut_agent).set_friend_weight(f1_ptr, Some(0.5)).unwrap();
+                (*mut_agent).set_friend_weight(f2_ptr, Some(1.0)).unwrap();
+            }
         }
         // Pressure is 0.2
 
@@ -2226,15 +2176,13 @@ mod tests {
         let belief2_ptr: *const dyn Belief = &belief2;
         let beliefs = vec![belief_ptr, belief2_ptr];
 
-        agent_ptr
-            .borrow_mut()
-            .set_activation(2, belief_ptr, Some(1.0))
-            .unwrap();
-        agent_ptr
-            .borrow_mut()
-            .set_activation(2, belief2_ptr, Some(1.0))
-            .unwrap();
         unsafe {
+            (*(agent_ptr as *mut dyn Agent))
+                .set_activation(2, belief_ptr, Some(1.0))
+                .unwrap();
+            (*(agent_ptr as *mut dyn Agent))
+                .set_activation(2, belief2_ptr, Some(1.0))
+                .unwrap();
             (*(belief_ptr as *mut dyn Belief))
                 .set_relationship(belief_ptr, Some(0.5))
                 .unwrap();
@@ -2245,11 +2193,11 @@ mod tests {
 
             assert!(approx_eq!(
                 f64,
-                agent_ptr.borrow().activation_change(
+                (*agent_ptr).activation_change(
                     2,
                     belief_ptr,
                     &beliefs as &[*const dyn Belief] as *const [*const dyn Belief],
-                    &agent_ptr.borrow().get_actions_of_friends(2)
+                    &(*agent_ptr).get_actions_of_friends(2)
                 ),
                 0.0875,
                 ulps = 2
@@ -2260,19 +2208,21 @@ mod tests {
     #[test]
     fn activation_change_when_pressure_negative() {
         let agent = BasicAgent::new();
-        let agent_ptr: AgentPtr = agent.into();
+        let agent_ptr: *const dyn Agent = &agent;
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
 
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
+        unsafe {
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b1_ptr));
+            (*(f2_ptr as *mut dyn Agent)).set_action(2, Some(b2_ptr));
+        }
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
@@ -2286,13 +2236,11 @@ mod tests {
         }
 
         {
-            let mut mut_agent = agent_ptr.borrow_mut();
-            mut_agent
-                .set_friend_weight(f1_ptr.clone(), Some(0.5))
-                .unwrap();
-            mut_agent
-                .set_friend_weight(f2_ptr.clone(), Some(1.0))
-                .unwrap();
+            let mut_agent = agent_ptr as *mut dyn Agent;
+            unsafe {
+                (*mut_agent).set_friend_weight(f1_ptr, Some(0.5)).unwrap();
+                (*mut_agent).set_friend_weight(f2_ptr, Some(1.0)).unwrap();
+            }
         }
         // Pressure is -0.2
 
@@ -2300,15 +2248,13 @@ mod tests {
         let belief2_ptr: *const dyn Belief = &belief2;
         let beliefs = vec![belief_ptr, belief2_ptr];
 
-        agent_ptr
-            .borrow_mut()
-            .set_activation(2, belief_ptr, Some(1.0))
-            .unwrap();
-        agent_ptr
-            .borrow_mut()
-            .set_activation(2, belief2_ptr, Some(1.0))
-            .unwrap();
         unsafe {
+            (*(agent_ptr as *mut dyn Agent))
+                .set_activation(2, belief_ptr, Some(1.0))
+                .unwrap();
+            (*(agent_ptr as *mut dyn Agent))
+                .set_activation(2, belief2_ptr, Some(1.0))
+                .unwrap();
             (*(belief_ptr as *mut dyn Belief))
                 .set_relationship(belief_ptr, Some(0.5))
                 .unwrap();
@@ -2319,11 +2265,11 @@ mod tests {
 
             assert!(approx_eq!(
                 f64,
-                agent_ptr.borrow().activation_change(
+                (*agent_ptr).activation_change(
                     2,
                     belief_ptr,
                     &beliefs as &[*const dyn Belief] as *const [*const dyn Belief],
-                    &agent_ptr.borrow().get_actions_of_friends(2)
+                    &(*agent_ptr).get_actions_of_friends(2)
                 ),
                 -0.1125,
                 ulps = 2
@@ -2343,7 +2289,7 @@ mod tests {
 
         agent.deltas = deltas;
 
-        let agent_ptr: AgentPtr = agent.into();
+        let agent_ptr: *const dyn Agent = &agent;
 
         unsafe {
             let expected_error = UpdateActivationError::GetActivationNone {
@@ -2353,11 +2299,11 @@ mod tests {
 
             assert_eq!(
                 update_activation_for_agent(
-                    &agent_ptr,
+                    agent_ptr as *mut dyn Agent,
                     3,
                     belief_ptr,
                     &beliefs as &[*const dyn Belief] as *const [*const dyn Belief],
-                    &agent_ptr.borrow().get_actions_of_friends(2)
+                    &(*agent_ptr).get_actions_of_friends(2)
                 )
                 .unwrap_err(),
                 expected_error
@@ -2377,14 +2323,14 @@ mod tests {
                 belief: *(*belief_ptr).uuid(),
             };
 
-            let agent_ptr: AgentPtr = agent.into();
+            let agent_ptr: *const dyn Agent = &agent;
             assert_eq!(
                 update_activation_for_agent(
-                    &agent_ptr,
+                    agent_ptr as *mut dyn Agent,
                     2,
                     belief_ptr,
                     &beliefs as &[*const dyn Belief] as *const [*const dyn Belief],
-                    &agent_ptr.borrow().get_actions_of_friends(2)
+                    &(*agent_ptr).get_actions_of_friends(2)
                 )
                 .unwrap_err(),
                 expected_error
@@ -2396,16 +2342,18 @@ mod tests {
     fn update_activation_when_new_value_in_range() {
         let mut agent = BasicAgent::new();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
+        unsafe {
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b1_ptr));
+            (*(f2_ptr as *mut dyn Agent)).set_action(2, Some(b2_ptr));
+        }
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
@@ -2418,10 +2366,10 @@ mod tests {
                 .unwrap();
         }
 
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
 
-        friends.insert(f1_ptr.clone(), 0.5);
-        friends.insert(f2_ptr.clone(), 1.0);
+        friends.insert(f1_ptr, 0.5);
+        friends.insert(f2_ptr, 1.0);
 
         agent.friends = friends;
         // Pressure is 0.2
@@ -2447,49 +2395,49 @@ mod tests {
         delta.insert(belief_ptr, 1.1);
         agent.deltas = delta;
 
-        let agent_ptr: AgentPtr = agent.into();
-
-        let actions = agent_ptr.borrow().get_actions_of_friends(2);
-
+        let agent_ptr: *const dyn Agent = &agent;
         unsafe {
+            let actions = (*agent_ptr).get_actions_of_friends(2);
+
             update_activation_for_agent(
-                &agent_ptr,
+                agent_ptr as *mut dyn Agent,
                 3,
                 belief_ptr,
                 &beliefs as &[*const dyn Belief] as *const [*const dyn Belief],
                 &actions,
             )
             .unwrap();
-        }
 
-        assert!(approx_eq!(
-            f64,
-            *agent_ptr
-                .borrow()
-                .get_activations()
-                .get(&3)
-                .unwrap()
-                .get(&belief_ptr)
-                .unwrap(),
-            0.65625,
-            ulps = 4
-        ))
+            assert!(approx_eq!(
+                f64,
+                *(*agent_ptr)
+                    .get_activations()
+                    .get(&3)
+                    .unwrap()
+                    .get(&belief_ptr)
+                    .unwrap(),
+                0.65625,
+                ulps = 4
+            ))
+        }
     }
 
     #[test]
     fn update_activation_when_new_value_too_high() {
         let mut agent = BasicAgent::new();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
+        unsafe {
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b1_ptr));
+            (*(f2_ptr as *mut dyn Agent)).set_action(2, Some(b2_ptr));
+        }
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
@@ -2502,10 +2450,10 @@ mod tests {
                 .unwrap();
         }
 
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
 
-        friends.insert(f1_ptr.clone(), 0.5);
-        friends.insert(f2_ptr.clone(), 1.0);
+        friends.insert(f1_ptr, 0.5);
+        friends.insert(f2_ptr, 1.0);
 
         agent.friends = friends;
         // Pressure is 0.2
@@ -2531,47 +2479,48 @@ mod tests {
         delta.insert(belief_ptr, 100000.0);
         agent.deltas = delta;
 
-        let agent_ptr: AgentPtr = agent.into();
-        let actions = agent_ptr.borrow().get_actions_of_friends(2);
+        let agent_ptr: *const dyn Agent = &agent;
         unsafe {
+            let actions = (*agent_ptr).get_actions_of_friends(2);
             update_activation_for_agent(
-                &agent_ptr,
+                agent_ptr as *mut dyn Agent,
                 3,
                 belief_ptr,
                 &beliefs as &[*const dyn Belief] as *const [*const dyn Belief],
                 &actions,
             )
             .unwrap();
-        }
 
-        assert!(approx_eq!(
-            f64,
-            *agent_ptr
-                .borrow()
-                .get_activations()
-                .get(&3)
-                .unwrap()
-                .get(&belief_ptr)
-                .unwrap(),
-            1.0,
-            ulps = 4
-        ))
+            assert!(approx_eq!(
+                f64,
+                *(*agent_ptr)
+                    .get_activations()
+                    .get(&3)
+                    .unwrap()
+                    .get(&belief_ptr)
+                    .unwrap(),
+                1.0,
+                ulps = 4
+            ))
+        }
     }
 
     #[test]
     fn update_activation_when_new_value_too_low() {
         let mut agent = BasicAgent::new();
         let f1 = BasicAgent::new();
-        let f1_ptr: AgentPtr = f1.into();
+        let f1_ptr: *const dyn Agent = &f1;
         let f2 = BasicAgent::new();
-        let f2_ptr: AgentPtr = f2.into();
+        let f2_ptr: *const dyn Agent = &f2;
         let b1 = BasicBehaviour::new("b1".to_string());
         let b1_ptr: *const dyn Behaviour = &b1;
         let b2 = BasicBehaviour::new("b2".to_string());
         let b2_ptr: *const dyn Behaviour = &b2;
 
-        f1_ptr.borrow_mut().set_action(2, Some(b1_ptr));
-        f2_ptr.borrow_mut().set_action(2, Some(b2_ptr));
+        unsafe {
+            (*(f1_ptr as *mut dyn Agent)).set_action(2, Some(b1_ptr));
+            (*(f2_ptr as *mut dyn Agent)).set_action(2, Some(b2_ptr));
+        }
 
         let belief = BasicBelief::new("b1".to_string());
         let belief_ptr: *const dyn Belief = &belief;
@@ -2584,10 +2533,10 @@ mod tests {
                 .unwrap();
         }
 
-        let mut friends: HashMap<AgentPtr, f64> = HashMap::new();
+        let mut friends: HashMap<*const dyn Agent, f64> = HashMap::new();
 
-        friends.insert(f1_ptr.clone(), 0.5);
-        friends.insert(f2_ptr.clone(), 1.0);
+        friends.insert(f1_ptr, 0.5);
+        friends.insert(f2_ptr, 1.0);
 
         agent.friends = friends;
         // Pressure is 0.2
@@ -2618,46 +2567,29 @@ mod tests {
         delta.insert(belief_ptr, -100000.0);
         agent.deltas = delta;
 
-        let agent_ptr: AgentPtr = agent.into();
-        let actions = agent_ptr.borrow().get_actions_of_friends(2);
+        let agent_ptr: *const dyn Agent = &agent;
         unsafe {
+            let actions = (*agent_ptr).get_actions_of_friends(2);
             update_activation_for_agent(
-                &agent_ptr,
+                agent_ptr as *mut dyn Agent,
                 3,
                 belief_ptr,
                 &beliefs as &[*const dyn Belief] as *const [*const dyn Belief],
                 &actions,
             )
             .unwrap();
+
+            assert!(approx_eq!(
+                f64,
+                *(*agent_ptr)
+                    .get_activations()
+                    .get(&3)
+                    .unwrap()
+                    .get(&belief_ptr)
+                    .unwrap(),
+                -1.0,
+                ulps = 4
+            ))
         }
-
-        assert!(approx_eq!(
-            f64,
-            *agent_ptr
-                .borrow()
-                .get_activations()
-                .get(&3)
-                .unwrap()
-                .get(&belief_ptr)
-                .unwrap(),
-            -1.0,
-            ulps = 4
-        ))
-    }
-
-    #[test]
-    fn test_from() {
-        let a = BasicAgent::new();
-        let uuid = *a.uuid();
-        let a_ptr: AgentPtr = AgentPtr::from(a);
-        assert_eq!(*a_ptr.borrow().uuid(), uuid);
-    }
-
-    #[test]
-    fn test_into() {
-        let a = BasicAgent::new();
-        let uuid = *a.uuid();
-        let a_ptr: AgentPtr = a.into();
-        assert_eq!(*a_ptr.borrow().uuid(), uuid);
     }
 }

@@ -244,6 +244,8 @@ pub trait Agent: UUIDd {
     /// The context.
     fn contextualise(&self, t: SimTime, b: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64;
 
+    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<BehaviourPtr, f64>;
+
     /// Gets the pressure the [Agent] feels to adopt a [BeliefPtr] given the
     /// actions of their friends.
     ///
@@ -256,7 +258,7 @@ pub trait Agent: UUIDd {
     ///
     /// # Returns
     /// The pressure
-    fn pressure(&self, time: SimTime, belief: &BeliefPtr) -> f64;
+    fn pressure(&self, belief: &BeliefPtr, actions_of_friends: &HashMap<BehaviourPtr, f64>) -> f64;
 
     /// Gets the change in activation for the [Agent] as a result of the
     /// [BehaviourPtr]s observed.
@@ -270,7 +272,13 @@ pub trait Agent: UUIDd {
     ///
     /// # Return
     /// - The change in activation
-    fn activation_change(&self, time: SimTime, belief: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64;
+    fn activation_change(
+        &self,
+        time: SimTime,
+        belief: &BeliefPtr,
+        beliefs: &[BeliefPtr],
+        actions_of_friends: &HashMap<BehaviourPtr, f64>,
+    ) -> f64;
 }
 
 /// A [BasicAgent] is an implementation of [Agent].
@@ -864,6 +872,16 @@ impl Agent for BasicAgent {
         }
     }
 
+    fn get_actions_of_friends(&self, t: SimTime) -> HashMap<BehaviourPtr, f64> {
+        self.friends
+            .iter()
+            .filter_map(|(a, &w)| a.borrow().get_action(t).map(|action| (action.clone(), w)))
+            .fold(HashMap::new(), |mut map, (beh, w)| {
+                *map.entry(beh).or_insert(0.0) += w;
+                map
+            })
+    }
+
     /// Gets the pressure the [Agent] feels to adopt a [BeliefPtr] given the
     /// actions of their friends.
     ///
@@ -903,20 +921,13 @@ impl Agent for BasicAgent {
     ///
     /// assert_eq!(agent.pressure(2, &belief_ptr), 0.2);
     /// ```
-    fn pressure(&self, time: SimTime, belief: &BeliefPtr) -> f64 {
+    fn pressure(&self, belief: &BeliefPtr, actions_of_friends: &HashMap<BehaviourPtr, f64>) -> f64 {
         match self.friends.len() {
             0 => 0.0,
             n => {
-                self.friends
+                actions_of_friends
                     .iter()
-                    .filter_map(|(a, w)| {
-                        a.borrow()
-                            .get_action(time)
-                            .map(|behaviour| {
-                                belief.borrow().get_perception(behaviour).unwrap_or(0.0)
-                            })
-                            .map(|v| v * w)
-                    })
+                    .filter_map(|(beh, w)| belief.borrow().get_perception(beh).map(|v| w * v))
                     .sum::<f64>()
                     / (n as f64)
             }
@@ -980,8 +991,14 @@ impl Agent for BasicAgent {
     ///     0.0875,
     ///     ulps = 2
     /// ))
-    fn activation_change(&self, time: SimTime, belief: &BeliefPtr, beliefs: &[BeliefPtr]) -> f64 {
-        match self.pressure(time, belief) {
+    fn activation_change(
+        &self,
+        time: SimTime,
+        belief: &BeliefPtr,
+        beliefs: &[BeliefPtr],
+        actions_of_friends: &HashMap<BehaviourPtr, f64>,
+    ) -> f64 {
+        match self.pressure(belief, actions_of_friends) {
             p if p > 0.0 => (1.0 + self.contextualise(time, belief, beliefs)) / 2.0 * p,
             p => (1.0 - self.contextualise(time, belief, beliefs)) / 2.0 * p,
         }
@@ -1081,6 +1098,7 @@ pub fn update_activation_for_agent(
     time: SimTime,
     belief: &BeliefPtr,
     beliefs: &[BeliefPtr],
+    actions_of_friends: &HashMap<BehaviourPtr, f64>,
 ) -> Result<(), UpdateActivationError> {
     let delta = agent.borrow().get_delta(belief);
     match delta {
@@ -1095,8 +1113,14 @@ pub fn update_activation_for_agent(
                     belief: *belief.borrow().uuid(),
                 }),
                 Some(a) => {
-                    let activation_change =
-                        { agent.borrow().activation_change(time - 1, belief, beliefs) };
+                    let activation_change = {
+                        agent.borrow().activation_change(
+                            time - 1,
+                            belief,
+                            beliefs,
+                            actions_of_friends,
+                        )
+                    };
                     let new_activation = (-1.0_f64).max((1.0_f64).min(d * a + activation_change));
                     agent
                         .borrow_mut()
@@ -1107,6 +1131,18 @@ pub fn update_activation_for_agent(
             }
         }
     }
+}
+
+pub fn update_activation_for_all_beliefs_for_agent(
+    agent: &AgentPtr,
+    time: SimTime,
+    beliefs: &[BeliefPtr],
+) -> Result<(), UpdateActivationError> {
+    let actions_of_friends = agent.borrow().get_actions_of_friends(time);
+    for belief in beliefs.iter() {
+        update_activation_for_agent(agent, time, belief, beliefs, &actions_of_friends)?
+    }
+    Ok(())
 }
 
 impl UUIDd for BasicAgent {
@@ -1925,7 +1961,10 @@ mod tests {
         let belief_ptr: BeliefPtr = belief.into();
         let friends: HashMap<AgentPtr, f64> = HashMap::new();
         agent.friends = friends;
-        assert_eq!(agent.pressure(2, &belief_ptr), 0.0);
+        assert_eq!(
+            agent.pressure(&belief_ptr, &agent.get_actions_of_friends(2)),
+            0.0
+        );
     }
 
     #[test]
@@ -1953,7 +1992,12 @@ mod tests {
                 .unwrap();
         }
 
-        assert_eq!(agent_ptr.borrow().pressure(2, &belief_ptr), 0.0);
+        assert_eq!(
+            agent_ptr
+                .borrow()
+                .pressure(&belief_ptr, &agent_ptr.borrow().get_actions_of_friends(2)),
+            0.0
+        );
     }
 
     #[test]
@@ -1988,7 +2032,12 @@ mod tests {
                 .unwrap();
         }
 
-        assert_eq!(agent_ptr.borrow().pressure(2, &belief_ptr), 0.0);
+        assert_eq!(
+            agent_ptr
+                .borrow()
+                .pressure(&belief_ptr, &agent_ptr.borrow().get_actions_of_friends(2)),
+            0.0
+        );
     }
 
     #[test]
@@ -2029,7 +2078,12 @@ mod tests {
                 .unwrap();
         }
 
-        assert_eq!(agent_ptr.borrow().pressure(2, &belief_ptr), 0.2);
+        assert_eq!(
+            agent_ptr
+                .borrow()
+                .pressure(&belief_ptr, &agent_ptr.borrow().get_actions_of_friends(2)),
+            0.2
+        );
     }
 
     #[test]
@@ -2095,9 +2149,12 @@ mod tests {
 
         assert!(approx_eq!(
             f64,
-            agent_ptr
-                .borrow()
-                .activation_change(2, &belief_ptr, &beliefs),
+            agent_ptr.borrow().activation_change(
+                2,
+                &belief_ptr,
+                &beliefs,
+                &agent_ptr.borrow().get_actions_of_friends(2)
+            ),
             0.0875,
             ulps = 2
         ))
@@ -2166,9 +2223,12 @@ mod tests {
 
         assert!(approx_eq!(
             f64,
-            agent_ptr
-                .borrow()
-                .activation_change(2, &belief_ptr, &beliefs),
+            agent_ptr.borrow().activation_change(
+                2,
+                &belief_ptr,
+                &beliefs,
+                &agent_ptr.borrow().get_actions_of_friends(2)
+            ),
             -0.1125,
             ulps = 2
         ))
@@ -2194,7 +2254,14 @@ mod tests {
         };
 
         assert_eq!(
-            update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap_err(),
+            update_activation_for_agent(
+                &agent_ptr,
+                3,
+                &belief_ptr,
+                &beliefs,
+                &agent_ptr.borrow().get_actions_of_friends(2)
+            )
+            .unwrap_err(),
             expected_error
         );
     }
@@ -2212,7 +2279,14 @@ mod tests {
 
         let agent_ptr: AgentPtr = agent.into();
         assert_eq!(
-            update_activation_for_agent(&agent_ptr, 2, &belief_ptr, &beliefs).unwrap_err(),
+            update_activation_for_agent(
+                &agent_ptr,
+                2,
+                &belief_ptr,
+                &beliefs,
+                &agent_ptr.borrow().get_actions_of_friends(2)
+            )
+            .unwrap_err(),
             expected_error
         );
     }
@@ -2278,7 +2352,9 @@ mod tests {
 
         let agent_ptr: AgentPtr = agent.into();
 
-        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
+        let actions = agent_ptr.borrow().get_actions_of_friends(2);
+
+        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs, &actions).unwrap();
 
         assert!(approx_eq!(
             f64,
@@ -2354,7 +2430,8 @@ mod tests {
         agent.deltas = delta;
 
         let agent_ptr: AgentPtr = agent.into();
-        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
+        let actions = agent_ptr.borrow().get_actions_of_friends(2);
+        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs, &actions).unwrap();
 
         assert!(approx_eq!(
             f64,
@@ -2435,7 +2512,8 @@ mod tests {
         agent.deltas = delta;
 
         let agent_ptr: AgentPtr = agent.into();
-        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs).unwrap();
+        let actions = agent_ptr.borrow().get_actions_of_friends(2);
+        update_activation_for_agent(&agent_ptr, 3, &belief_ptr, &beliefs, &actions).unwrap();
 
         assert!(approx_eq!(
             f64,

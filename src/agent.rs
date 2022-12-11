@@ -1157,7 +1157,7 @@ pub fn update_activation_for_all_beliefs_for_agent(
     time: SimTime,
     beliefs: &[BeliefPtr],
 ) -> Result<(), UpdateActivationError> {
-    let actions_of_friends = agent.borrow().get_actions_of_friends(time);
+    let actions_of_friends = agent.borrow().get_actions_of_friends(time - 1);
     for belief in beliefs.iter() {
         update_activation_for_agent(agent, time, belief, beliefs, &actions_of_friends)?
     }
